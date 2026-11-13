@@ -77,6 +77,21 @@ describe('StudioFlow', () => {
     expect(screen.getAllByText('Mock preview · not AI').length).toBeGreaterThan(0)
   })
 
+  it('continues from frames to preview & download and back', async () => {
+    const { user } = renderRoute(ROUTES.studio)
+    await user.click(screen.getByRole('button', { name: /choose a style/i }))
+    await user.click(screen.getByRole('button', { name: 'Continue to frames' }))
+    await user.click(screen.getByRole('button', { name: 'Continue to download' }))
+
+    expect(screen.getByRole('heading', { name: 'Preview and download' })).toHaveFocus()
+    const progress = screen.getByRole('list', { name: 'Progress' })
+    expect(progress.querySelector('[aria-current="step"]')).toHaveTextContent('Download')
+    expect(screen.getByRole('textbox', { name: 'File name' })).toHaveValue('avatar-neon')
+
+    await user.click(screen.getByRole('button', { name: 'Back to frames' }))
+    expect(screen.getByRole('heading', { name: 'Frame your avatar' })).toHaveFocus()
+  })
+
   it('shows the capture step when there is no photo yet', () => {
     usePhotoStore.getState().reset()
     renderRoute(ROUTES.studio)

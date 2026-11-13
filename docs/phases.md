@@ -8,8 +8,8 @@ Each phase is implemented on its own, verified, documented here, and then paused
 | 1     | Design system and landing page                  | ✅ Complete             |
 | 2     | Camera capture and image upload                 | ✅ Complete             |
 | 3     | Avatar style selection and mock generation      | ✅ Complete             |
-| 4     | Frame customization editor                      | ✅ Complete — in review |
-| 5     | Preview and high-resolution export              | ⏳ Not started          |
+| 4     | Frame customization editor                      | ✅ Complete             |
+| 5     | Preview and high-resolution export              | ✅ Complete — in review |
 | 6     | Backend and real AI generation                  | ⏳ Not started          |
 | 7     | Payments and usage limits                       | ⏳ Not started          |
 | 8     | Testing, optimization, security, and deployment | ⏳ Not started          |
@@ -415,7 +415,7 @@ wasn't visible). Verified in the browser and covered by the compare test.
 
 ## Phase 4 — Frame customization editor
 
-**Date:** 2026-11-13 · **Status:** Complete, awaiting approval
+**Date:** 2026-11-13 · **Status:** Complete (approved)
 
 ### Objectives
 
@@ -515,3 +515,89 @@ automatically (`pendingId` in the style store; cleared when it starts, on succes
 cancels). A style that was selected but never generated just stays selected. Results from the old
 photo are never shown over the new one. Verified in Chrome on the production build and on the
 dev server (React StrictMode double-mount); 7 new tests (242 total).
+
+---
+
+## Phase 5 — Preview and high-resolution export
+
+**Date:** 2026-11-13 · **Status:** Complete, awaiting approval
+
+### Objectives
+
+- Live circular preview and an export workflow.
+- 1080×1080 square containing the selected avatar, crop, background and frame; essential content
+  inside the circular safe area.
+- PNG and JPEG, download naming, loading/error states, accurate composition.
+- Verify exported dimensions and that the export matches the editor preview.
+
+No new dependencies.
+
+### What was built (`src/features/export/`)
+
+- **`renderAvatarImage`** — creates a 1080×1080 canvas and calls the **same `drawAvatar`** used by
+  the frame editor and every preview, then encodes PNG or JPEG (quality 60–100 %, default 92 %).
+  Errors are typed: `source-missing`, `canvas-unavailable`, `encode-failed` (incl. a browser
+  silently falling back to another MIME type), `size-mismatch`, `download-failed`.
+- **Verification** — every export is decoded again (`createImageBitmap`) and rejected unless it is
+  exactly 1080×1080 before it reaches the user.
+- **Naming** (`lib/fileName.ts`) — default `avatar-<style>-<frame>-1080x1080.<png|jpg>`; the base is
+  editable and sanitized (ASCII lowercase, dashes, accents stripped, path characters removed,
+  60-char cap, falls back to `avatar`). The final name is shown before downloading.
+- **Delivery** (`lib/deliver.ts`) — temporary `<a download>` link (URL revoked after 30 s); on
+  devices whose share sheet accepts files, a **Share** button (dismissing the sheet isn't an error).
+- **`useExport`** — idle → preparing → done (file name, dimensions, size) / error with retry. Each
+  state remembers the request it belongs to, so changing format, quality, name or frame clears a
+  stale "Downloaded" message (derived in render, no state-in-effect).
+- **`ExportStep`** (step 5) — live previews drawn by the shared renderer: **Profile** (circle in a
+  profile header), **Square** (the full file, showing the corners circle-cropped platforms hide),
+  **Sizes** (profile, story ring, feed, comment); safe-area toggle; format cards; JPEG quality;
+  file name; Download/Share; success and error states; "Mock style, not AI" note for mock
+  results.
+- **Studio** — "Continue to download" on the frame step; progress shows step 5; Back returns to
+  frames. `frames` now also exports `FrameCanvas`, `useSourceImage` and `describeFrame`.
+
+### Files
+
+Created: `src/features/export/` — `types.ts`, `messages.ts`, `index.ts`,
+`lib/{renderAvatarImage,fileName,deliver}.ts`, `hooks/useExport.ts`,
+`components/{ExportStep,AvatarPreviews}.tsx`; tests `lib/{renderAvatarImage,fileName,deliver}.test.ts`,
+`components/ExportStep.test.tsx`.
+
+Modified: `src/features/studio/StudioFlow.tsx` (+ test), `src/features/frames/components/FrameStep.tsx`
+(+ test; `onContinue`), `src/features/frames/index.ts`, docs.
+
+### Verification (run 2026-11-13)
+
+| Command                | Result                                                    |
+| ---------------------- | --------------------------------------------------------- |
+| `npm run typecheck`    | ✅ No errors                                              |
+| `npm run lint`         | ✅ No errors or warnings                                  |
+| `npm run format:check` | ✅ All files formatted                                    |
+| `npm test`             | ✅ 28 files, 285 tests passed                             |
+| `npm run build`        | ✅ JS 487.8 kB (150.2 kB gzip), CSS 44.9 kB (9.0 kB gzip) |
+
+Unit/component tests: canvas created at 1080×1080 and drawn with `drawAvatar(ctx, 1080, settings,
+source)`; PNG/JPEG MIME and quality; every error kind; wrong decoded size is refused and never
+downloaded; file naming and sanitization; download link + delayed revoke; share supported /
+unsupported / dismissed; loading, success, error + retry, stale-state clearing; preview views; axe
+before and after a download.
+
+Real Chrome, production build, actual downloaded files inspected with Pillow:
+
+- Upload → crop → Anime Classic (mock) → Flame at max height → download PNG and JPEG (custom name
+  "My Insta Pic!! 2026" → `my-insta-pic-2026-1080x1080.jpg`).
+- Both files: **1080×1080**, correct format; PNG fully opaque (alpha 255).
+- **Desktop (DPR 1) and mobile (DPR 3) PNG exports are byte-identical** (same SHA-256).
+- **Outside the circular safe area: 61,387 sampled pixels, 0 differ from the background**, in both
+  PNG and JPEG.
+- **Export vs editor preview** (export downscaled to the preview canvas size): mean difference
+  0.47/255 (416 px desktop preview) and 0.26/255 (1068 px mobile preview).
+- PNG vs JPEG at 85 %: mean difference 1.1/255.
+- No horizontal overflow, zero external requests. Phase 2–4 browser checks re-run and pass.
+
+### Limitations / notes
+
+- Export size is fixed at 1080×1080 (the spec's default). Larger sizes would be a one-line option.
+- iOS Safari opens downloads in a preview first; the Share button is the smoother path on iPhone.
+- PNG output is RGBA (fully opaque) — browsers' canvas encoders always write an alpha channel.
+- Everything stays in the browser; nothing is uploaded.

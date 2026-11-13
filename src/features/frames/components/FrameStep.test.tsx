@@ -22,7 +22,13 @@ function setup(props: Partial<Parameters<typeof FrameStep>[0]> = {}) {
   const onBack = vi.fn<() => void>()
   render(
     <main>
-      <FrameStep source={source} onBack={onBack} focusOnMount {...props} />
+      <FrameStep
+        source={source}
+        onBack={onBack}
+        onContinue={vi.fn<() => void>()}
+        focusOnMount
+        {...props}
+      />
     </main>,
   )
   return { user, onBack }

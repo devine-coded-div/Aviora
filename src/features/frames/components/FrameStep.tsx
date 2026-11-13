@@ -1,4 +1,4 @@
-import { ArrowLeft, Circle, FlaskConical, Loader2, Square } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Circle, FlaskConical, Loader2, Square } from 'lucide-react'
 import { useId, useState } from 'react'
 import { Badge, Button, Notice, StepHeading } from '@/components/ui'
 import { cn } from '@/lib/cn'
@@ -15,12 +15,14 @@ export interface FrameStepProps {
   /** The image to frame: the styled result if there is one, else the cropped photo. */
   source: { url: string; label: string; isMock: boolean }
   onBack: () => void
+  /** Move on to preview & download. */
+  onContinue: () => void
   focusOnMount: boolean
 }
 
 type View = 'circle' | 'square'
 
-export function FrameStep({ source, onBack, focusOnMount }: FrameStepProps) {
+export function FrameStep({ source, onBack, onContinue, focusOnMount }: FrameStepProps) {
   const settings = useFrameStore((s) => s.present)
   const choosePreset = useFrameStore((s) => s.choosePreset)
   const update = useFrameStore((s) => s.update)
@@ -160,7 +162,10 @@ export function FrameStep({ source, onBack, focusOnMount }: FrameStepProps) {
           <ArrowLeft aria-hidden="true" />
           Back to styles
         </Button>
-        <p className="text-sm text-fg-muted">Next: preview and download — coming soon.</p>
+        <Button variant="primary" onClick={onContinue}>
+          Continue to download
+          <ArrowRight aria-hidden="true" />
+        </Button>
       </div>
     </div>
   )

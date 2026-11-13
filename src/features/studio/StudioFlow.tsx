@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import { CaptureFlow, usePhotoStore, type CaptureStep } from '@/features/capture'
+import { ExportStep } from '@/features/export'
 import { FrameStep } from '@/features/frames'
 import {
   GenerationProviderScope,
@@ -10,13 +11,13 @@ import {
 } from '@/features/styles'
 import { StudioProgress } from './StudioProgress'
 
-type Stage = 'photo' | 'style' | 'frame'
+type Stage = 'photo' | 'style' | 'frame' | 'export'
 
 function captureProgress(step: CaptureStep): number {
   return step === 'crop' || step === 'done' ? 1 : 0
 }
 
-/** Top-level editor: photo (capture + crop) → style → frame. Export joins in Phase 5. */
+/** Top-level editor: photo (capture + crop) → style → frame → preview & download. */
 export function StudioFlow({ provider }: { provider?: AvatarGenerationProvider }) {
   const cropped = usePhotoStore((s) => s.cropped)
   const selectedStyleId = useStyleStore((s) => s.selectedId)
@@ -34,14 +35,22 @@ export function StudioFlow({ provider }: { provider?: AvatarGenerationProvider }
 
   const activeStage: Stage = cropped ? stage : 'photo'
   const current =
-    activeStage === 'frame' ? 3 : activeStage === 'style' ? 2 : captureProgress(captureStep)
+    activeStage === 'export'
+      ? 4
+      : activeStage === 'frame'
+        ? 3
+        : activeStage === 'style'
+          ? 2
+          : captureProgress(captureStep)
 
   // Frame the styled result when there is one; otherwise the plain cropped photo.
+  const styleName = getStyle(selectedStyleId)?.name
   const frameSource = styleResult
     ? {
         url: styleResult.url,
-        label: `${getStyle(selectedStyleId)?.name ?? 'Styled'} style`,
+        label: `${styleName ?? 'Styled'} style`,
         isMock: styleResult.provider.kind === 'mock',
+        styleName,
       }
     : cropped
       ? { url: cropped.url, label: 'your photo (no style)', isMock: false }
@@ -51,8 +60,15 @@ export function StudioFlow({ provider }: { provider?: AvatarGenerationProvider }
     <GenerationProviderScope {...(provider ? { provider } : {})}>
       <div className="flex flex-col gap-8">
         <StudioProgress current={current} />
-        {activeStage === 'frame' && frameSource ? (
-          <FrameStep source={frameSource} onBack={() => go('style')} focusOnMount={navigated} />
+        {activeStage === 'export' && frameSource ? (
+          <ExportStep source={frameSource} onBack={() => go('frame')} focusOnMount={navigated} />
+        ) : activeStage === 'frame' && frameSource ? (
+          <FrameStep
+            source={frameSource}
+            onBack={() => go('style')}
+            onContinue={() => go('export')}
+            focusOnMount={navigated}
+          />
         ) : activeStage === 'style' && cropped ? (
           <StyleStep
             source={{ blob: cropped.blob, url: cropped.url }}
