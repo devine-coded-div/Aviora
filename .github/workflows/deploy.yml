@@ -58,8 +58,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # Requires Settings → Pages → Source: "GitHub Actions" (one-time, manual).
       - uses: actions/configure-pages@v6
-        with:
-          enablement: true
       - id: deployment
         uses: actions/deploy-pages@v5
