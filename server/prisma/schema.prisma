@@ -1,0 +1,52 @@
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "ts"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+/// One avatar generation request. Rows are deleted when their result expires.
+model GenerationJob {
+  id              String    @id @db.Uuid
+  /// SHA-256 of the access token given to the client. The token itself is never stored.
+  tokenHash       String
+  /// HMAC of the client IP, for rate limiting without storing addresses.
+  clientHash      String
+  status          JobStatus @default(PENDING)
+  styleId         String
+  providerId      String
+  /// Storage key of the normalized upload. Null once deleted.
+  inputKey        String?
+  resultKey       String?
+  resultMime      String?
+  attempts        Int       @default(0)
+  maxAttempts     Int
+  manualRetries   Int       @default(0)
+  errorCode       String?
+  errorMessage    String?
+  retryable       Boolean   @default(false)
+  /// Estimated provider cost in micro-dollars, reserved at creation for the daily budget.
+  costMicros      Int       @default(0)
+  nextAttemptAt   DateTime  @default(now())
+  lockedAt        DateTime?
+  completedAt     DateTime?
+  failedAt        DateTime?
+  resultExpiresAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([clientHash, status])
+  @@index([createdAt])
+}

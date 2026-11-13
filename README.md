@@ -3,7 +3,7 @@
 A profile picture studio: capture or upload a photo, turn it into a stylized avatar, frame it, and
 export a 1080×1080 image for Instagram and other social platforms.
 
-> Status: **Phase 5 (full editor with 1080×1080 PNG/JPEG export; styles still use a mock generator — not AI yet)**. Live: https://devine-coded-div.github.io/Aviora/ · See [docs/phases.md](docs/phases.md).
+> Status: **Phase 6 (API server with job pipeline; no real AI provider connected yet — styles use a labelled mock)**. Live: https://devine-coded-div.github.io/Aviora/ · See [docs/phases.md](docs/phases.md).
 
 ## Requirements
 
@@ -49,6 +49,11 @@ run the checks only. See `.github/workflows/deploy.yml`.
 
 The build reads `BASE_PATH` (set automatically in CI) so assets and routes work under the
 `/<repo>/` subpath; `404.html` is a copy of `index.html` so deep links like `/studio` load.
+
+## API server
+
+The backend lives in [`server/`](server/README.md) (Express + Prisma + PostgreSQL + S3-compatible
+storage). It isn't deployed yet.
 
 ## Docs
 

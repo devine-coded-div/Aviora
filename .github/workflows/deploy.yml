@@ -1,7 +1,7 @@
 name: CI & deploy
 
-# Every push to main is checked and, if everything passes, deployed to GitHub Pages.
-# Pull requests are checked only.
+# Every push to main is checked (frontend + API server) and, if everything passes, the frontend
+# is deployed to GitHub Pages. Pull requests are checked only. The API isn't deployed yet.
 on:
   push:
     branches: [main]
@@ -46,9 +46,59 @@ jobs:
         with:
           path: dist
 
+  server:
+    name: API server (Postgres, migrations, integration tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_ADMIN_URL: postgresql://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Apply migrations with Prisma and check for schema drift
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: |
+          psql "$DATABASE_URL" -c 'CREATE DATABASE avatar_migrate'
+          export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/avatar_migrate
+          npx prisma migrate deploy
+          # Fails (exit 2) if the migrations don't produce exactly the schema in schema.prisma.
+          npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+
+      - name: Typecheck, lint, format check
+        run: npm run typecheck && npm run lint && npm run format:check
+
+      - name: Integration tests (real Postgres + S3 emulator)
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
   deploy:
     name: Deploy to GitHub Pages
-    needs: check
+    needs: [check, server]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:

@@ -9,8 +9,8 @@ Each phase is implemented on its own, verified, documented here, and then paused
 | 2     | Camera capture and image upload                 | ✅ Complete             |
 | 3     | Avatar style selection and mock generation      | ✅ Complete             |
 | 4     | Frame customization editor                      | ✅ Complete             |
-| 5     | Preview and high-resolution export              | ✅ Complete — in review |
-| 6     | Backend and real AI generation                  | ⏳ Not started          |
+| 5     | Preview and high-resolution export              | ✅ Complete             |
+| 6     | Backend and real AI generation                  | ✅ Complete — in review |
 | 7     | Payments and usage limits                       | ⏳ Not started          |
 | 8     | Testing, optimization, security, and deployment | ⏳ Not started          |
 
@@ -520,7 +520,7 @@ dev server (React StrictMode double-mount); 7 new tests (242 total).
 
 ## Phase 5 — Preview and high-resolution export
 
-**Date:** 2026-11-13 · **Status:** Complete, awaiting approval
+**Date:** 2026-11-13 · **Status:** Complete (approved)
 
 ### Objectives
 
@@ -601,3 +601,118 @@ Real Chrome, production build, actual downloaded files inspected with Pillow:
 - iOS Safari opens downloads in a preview first; the Share button is the smoother path on iPhone.
 - PNG output is RGBA (fully opaque) — browsers' canvas encoders always write an alpha channel.
 - Everything stays in the browser; nothing is uploaded.
+
+---
+
+## Phase 6 — Backend API and generation pipeline
+
+**Date:** 2026-11-13 · **Status:** Complete, awaiting approval
+
+### Objectives
+
+Express TypeScript API with upload validation, private object storage, a generation job lifecycle
+(pending / processing / completed / failed, retries, cleanup of temporary images), a server-side AI
+provider adapter, rate limiting and status endpoints. Credentials never reach the browser. **A real
+AI provider is only added once its credentials, capabilities, cost and retention terms are
+configured — none is connected in this phase.**
+
+### What was built (`server/`, a sibling package)
+
+See `server/README.md` for the full API and operating notes.
+
+- **Stack**: Express 5, TypeScript 7, Prisma 7.10.1 (pg driver adapter) on PostgreSQL, AWS SDK v3
+  for S3-compatible storage, sharp, zod, helmet, cors, express-rate-limit, multer.
+- **Config** (`src/config.ts`): zod-validated env. Refuses to start in production without a client
+  hashing secret, S3 storage and CORS origins. **Provider gate**: any `AI_PROVIDER` other than
+  `mock` requires API key, supported styles, cost per image, provider retention days (≤ 30),
+  `AI_PROVIDER_TRAINS_ON_INPUTS=false` and a daily budget, and an implemented adapter; otherwise
+  the server exits listing what's missing.
+- **Uploads** (`src/uploads/validateImage.ts`): size limit, decode-based format check
+  (JPEG/PNG/WebP), 256–4096 px, no animation, decompression-bomb guard, re-encode to a 1024×1024
+  PNG that strips all metadata.
+- **Storage**: `S3Storage` (private, key prefix, `no-store`) and `MemoryStorage` (dev/test only).
+- **Jobs**: Prisma model `GenerationJob` (+ hand-written SQL migration, see below). `JobService`
+  (create with per-client active-job cap and daily budget reservation; token-authorized read,
+  retry, delete). `JobWorker` (claims with `FOR UPDATE SKIP LOCKED`, timeouts via `AbortSignal`,
+  backoff retries, stale-job recovery, discards results of deleted jobs). `sweep()` cleanup.
+- **HTTP**: endpoints for health, provider info, create, status, result, retry, delete; uniform
+  JSON errors that never leak internals; helmet headers, `no-store`, CORS allowlist; rate limits
+  per minute / per hour keyed by an HMAC of the client IP (IPv6 /56).
+- **Provider adapter**: `AvatarProvider` interface + typed `ProviderError` with retryability;
+  `mock` provider (sharp filters, simulated latency/failures, `kind: "mock"`); empty adapter
+  registry for real vendors.
+- **Frontend client** (`src/features/styles/generation/apiProvider.ts`): implements the existing
+  `AvatarGenerationProvider` (upload → poll → download → delete the server copy, cancel deletes the
+  job, server error codes mapped to UI error kinds, server-side mocks stay labelled as mocks).
+  **Not switched on in the UI yet** — the live site keeps the on-device mock until the API is
+  hosted.
+- **CI**: new `server` job with a Postgres 16 service container: `prisma generate`, real
+  `prisma migrate deploy`, schema-drift check (`prisma migrate diff --exit-code`), typecheck, lint,
+  format, integration tests, build. Frontend deploy now waits for it.
+
+### Workspace constraint (Prisma)
+
+This workspace can't reach `binaries.prisma.sh`, so the Prisma CLI's schema engine is unavailable
+here. `prisma generate` works (with `PRISMA_SCHEMA_ENGINE_BINARY` pointed at a dummy path) and
+Prisma Client queries work through the pg adapter, but `prisma migrate` doesn't. The initial
+migration SQL was therefore written by hand in Prisma's format and applied locally with `psql`;
+CI (which can reach Prisma) runs the real `prisma migrate deploy` and fails if the SQL and
+`schema.prisma` ever differ. Local development on a normal machine uses the Prisma CLI as usual.
+
+### Files
+
+Created: `server/` — `package.json`, `package-lock.json`, `tsconfig*.json`, `vitest.config.ts`,
+`prisma.config.ts`, `prisma/schema.prisma`, `prisma/migrations/**`, `.env.example`, `.gitignore`,
+`.prettierrc.json`, `.prettierignore`, `.oxlintrc.json`, `README.md`,
+`src/{config,styles,db,server}.ts`, `src/storage/{types,memory,s3}.ts`,
+`src/providers/{types,mock,registry}.ts`, `src/uploads/validateImage.ts`,
+`src/jobs/{tokens,errors,service,worker,cleanup}.ts`, `src/http/{app,errors,serialize}.ts`,
+`test/{globalSetup,helpers,api.test,cleanup.test,s3.test,config.test,s3rver.d}.ts`.
+Frontend: `src/features/styles/generation/apiProvider.ts` (+ test).
+
+Modified: `.github/workflows/deploy.yml` (server job; deploy needs it), root `.prettierignore` and
+`.oxlintrc.json` (exclude `server/`), `src/features/styles/index.ts`, docs.
+
+### Verification (run 2026-11-13)
+
+| Command                                           | Result                                                               |
+| ------------------------------------------------- | -------------------------------------------------------------------- |
+| `server: npm run typecheck / lint / format:check` | ✅ Clean                                                             |
+| `server: npm test`                                | ✅ 4 files, 48 tests (real Postgres 16 + s3rver), 3 consecutive runs |
+| `server: npm run build`                           | ✅ Compiled to `dist/`                                               |
+| `npm run check` (frontend)                        | ✅ 29 files, 295 tests; build OK                                     |
+| `npm audit --omit=dev` (server)                   | ✅ 0 vulnerabilities                                                 |
+
+Integration tests cover: valid upload → pending + token (token/IP stored only hashed); metadata
+and GPS stripped; rejections (no file, GIF, SVG, text, too small, too large, animated WebP, size
+limit, unknown/unsupported style); token-only access with identical 404s; no internal fields in
+responses; pending → processing → completed with result download and input deletion; backoff
+retry; failure after max attempts then manual retry; non-retryable failures; manual-retry limit;
+stale-job recovery; competing workers process a job once; missing input; delete (incl. while
+processing); hourly and active-job limits; daily budget; CORS allowlist; security headers; JSON
+404s; internal errors hidden; cleanup (result TTL, failed-input TTL, leftover inputs, abandoned
+jobs); S3 roundtrip and a full generation through S3; config gate and production requirements;
+no secrets in `/api/provider`; server and frontend style catalogs identical.
+
+Manual checks: compiled server started for real and exercised with curl (pending → processing →
+completed automatically, 1024×1024 PNG result, 404 without token, 422 for a text file, 204 delete,
+CORS allowed/blocked); server exits with clear messages for a half-configured provider, a provider
+without an adapter, and production without secrets; the frontend API client run against the real
+server produced a PNG, kept `kind: "mock"`, and deleted its job afterwards (0 rows left).
+
+Issues found and fixed during the phase: IPv6 clients could bypass rate limits (now keyed by /56);
+a test fixture that wasn't really animated; a flaky test caused by two simulated instances not
+sharing storage; unhandled "no adapter" startup error.
+
+### Limitations / open decisions
+
+- **Not deployed.** GitHub Pages is static; the API needs a Node host, a Postgres database and a
+  private bucket. Needs your choice of providers (e.g. Render/Railway/Fly.io + Neon/Supabase +
+  Cloudflare R2/S3).
+- **No real AI provider.** Needs a vendor choice and its terms (see `server/README.md`).
+- The frontend still uses the on-device mock; switching to the API client is a small change once
+  the API is hosted (show "Connecting…" while `/api/provider` loads, keep mock labelling).
+- Rate limits are per process (in memory); with several instances, use a shared store
+  (Redis/Postgres) for express-rate-limit. The job queue itself is already multi-instance safe.
+- No user accounts yet; jobs are protected by capability tokens. Phase 7 adds payments and usage
+  limits per user.

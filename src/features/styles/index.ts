@@ -14,3 +14,4 @@ export {
 } from './generation/types'
 export { useStyleStore, type StyleResult } from './store'
 export type { AvatarStyle, StyleCategory } from './types'
+export { createApiProvider, fetchProviderInfo } from './generation/apiProvider'

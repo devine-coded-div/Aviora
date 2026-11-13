@@ -14,7 +14,7 @@ ai-avatar-studio/
 │  ├─ styles/              Tailwind entry point and design tokens
 │  └─ test/                Test setup and helpers
 ├─ docs/                   Phase log and architecture notes
-└─ server/                 Express + Prisma backend (introduced in Phase 6)
+└─ server/                 Express + Prisma API (see server/README.md)
 ```
 
 The backend will be a sibling package in `server/` with its own `package.json`. No monorepo tool
@@ -57,7 +57,8 @@ progress callback, and resolves with an image or rejects with a typed `Generatio
 `info.kind === 'mock'` makes the UI show "not AI" labelling. The Phase 6 provider will call our own
 backend (never an AI vendor directly from the browser) and be passed to `GenerationProviderScope`.
 
-Planned: backend + real AI provider (Phase 6), payments (Phase 7).
+Planned: payments and usage limits (Phase 7). A real AI provider plugs into the server's
+adapter registry once its terms are configured.
 
 ## Rules of thumb
 
@@ -87,3 +88,10 @@ The alias is defined in both `tsconfig.app.json` (`paths`) and `vite.config.ts` 
 export. All geometry is proportional to `size` and computed by `layout.ts`, which
 reserves room for glow/flames inside the inscribed circle. Keep any new frame effect inside
 `normalizedLayout(...).effectOuter` and add it to the layout tests.
+
+## Backend (`server/`)
+
+Single Express process: HTTP API + in-process job worker + cleanup timer, PostgreSQL via Prisma,
+private S3-compatible storage. The browser talks only to our API with per-job tokens; provider
+credentials never leave the server. The frontend's `createApiProvider` implements the same
+`AvatarGenerationProvider` interface as the on-device mock.
