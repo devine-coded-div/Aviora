@@ -1,10 +1,10 @@
-import { Crop, ImageUp } from 'lucide-react'
-import { Button } from '@/components/ui'
+import { ArrowRight, Crop, ImageUp, Sparkles } from 'lucide-react'
+import { Button, Notice } from '@/components/ui'
 import type { CroppedPhoto } from '../types'
-import { Notice } from './Notice'
 
 export interface CropResultProps {
   cropped: CroppedPhoto
+  onContinue: () => void
   onAdjust: () => void
   onStartOver: () => void
 }
@@ -15,7 +15,7 @@ const previews = [
   { label: 'Comment', className: 'size-8' },
 ] as const
 
-export function CropResult({ cropped, onAdjust, onStartOver }: CropResultProps) {
+export function CropResult({ cropped, onContinue, onAdjust, onStartOver }: CropResultProps) {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
       <div className="grid items-center gap-6 sm:grid-cols-[1fr_auto]">
@@ -58,6 +58,12 @@ export function CropResult({ cropped, onAdjust, onStartOver }: CropResultProps) 
         />
       )}
 
+      <Button variant="gradient" size="lg" className="self-center" onClick={onContinue}>
+        <Sparkles aria-hidden="true" />
+        Choose a style
+        <ArrowRight aria-hidden="true" />
+      </Button>
+
       <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
         <Button variant="secondary" onClick={onAdjust}>
           <Crop aria-hidden="true" />
@@ -68,15 +74,6 @@ export function CropResult({ cropped, onAdjust, onStartOver }: CropResultProps) 
           Use a different photo
         </Button>
       </div>
-
-      <Notice
-        tone="info"
-        message={{
-          title: 'Next up: choose a style',
-          description:
-            'Cartoon, anime, realistic, 2D illustration and pixel-art styles are coming in the next update. Your photo is kept in this browser tab until you close or refresh it.',
-        }}
-      />
     </div>
   )
 }

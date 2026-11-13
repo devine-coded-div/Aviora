@@ -6,8 +6,8 @@ Each phase is implemented on its own, verified, documented here, and then paused
 | ----- | ----------------------------------------------- | ----------------------- |
 | 0     | Project foundation                              | ✅ Complete             |
 | 1     | Design system and landing page                  | ✅ Complete             |
-| 2     | Camera capture and image upload                 | ✅ Complete — in review |
-| 3     | Avatar style selection and mock generation      | ⏳ Not started          |
+| 2     | Camera capture and image upload                 | ✅ Complete             |
+| 3     | Avatar style selection and mock generation      | ✅ Complete — in review |
 | 4     | Frame customization editor                      | ⏳ Not started          |
 | 5     | Preview and high-resolution export              | ⏳ Not started          |
 | 6     | Backend and real AI generation                  | ⏳ Not started          |
@@ -212,7 +212,7 @@ part of the repo):
 
 ## Phase 2 — Camera capture and image upload
 
-**Date:** 2026-11-13 · **Status:** Complete, awaiting approval
+**Date:** 2026-11-13 · **Status:** Complete (approved)
 
 ### Objectives
 
@@ -303,3 +303,106 @@ throwaway script, not in repo):
 - react-easy-crop injects a small `<style>` tag at runtime; account for this when a CSP is added
   (Phase 8).
 - No Playwright suite in the repo yet; the fake-camera script is a good basis for one.
+
+---
+
+## Phase 3 — Avatar style selection and mock generation
+
+**Date:** 2026-11-13 · **Status:** Complete, awaiting approval
+
+### Objectives
+
+- Data-driven style catalog: Cartoon, Anime, Realistic, 2D, Pixel Art.
+- Thumbnails, selected states, preview panel, generation progress, retry/error UI.
+- Typed `AvatarGenerationProvider` interface plus a clearly labelled **mock** provider.
+- No real AI, no paid API, no pretending the mock is AI.
+
+No new dependencies.
+
+### What was built
+
+**Refactor (shared code):** the SVG avatar illustrations and CSS frames moved from `landing` to
+`src/components/avatar/`; `Notice` and `StepHeading` moved to `src/components/ui/`. The step
+progress indicator moved from `CaptureFlow` to the new `studio` feature.
+
+**`src/features/styles/`**
+
+- `catalog.ts` — 10 styles (2 per category), each with name, description, Premium flag,
+  illustrated thumbnail (+ optional CSS filter) and mock settings. `StyleId` is derived from the
+  data. Adding a style is a data change only.
+- `generation/types.ts` — `AvatarGenerationProvider { info; generate({ image, styleId, signal,
+onProgress }) }`, `ProviderInfo { kind: 'mock' | 'ai'; runsOnDevice }`, staged progress, and
+  `GenerationError` with `kind` (`cancelled`, `invalid-input`, `timeout`, `rate-limited`, `network`,
+  `provider-error`) and `retryable`.
+- `generation/mockProvider.ts` — **MOCK**. Simulated queued → processing → finalizing progress,
+  honours `AbortSignal`, validates input, optional simulated failures (`?mockFailRate=0–1` in the
+  URL), then applies simple on-device colour effects. No AI, no network.
+- `generation/effects.ts` — pure, tested pixel effects (saturation/contrast/brightness,
+  posterize, tint, pixelate); `render.ts` is the thin canvas wrapper.
+- `GenerationProviderScope` (React context) — defaults to the mock; tests and Phase 6 inject
+  their own provider.
+- `store.ts` — selected style and results cached per style, tied to the cropped photo URL; results
+  are dropped and object URLs revoked when the photo changes; late results for an old photo are
+  discarded.
+- `useGeneration` — one job at a time, cancel, retry with attempt counting, cancels on unmount.
+- UI: `StyleStep` (heading, disclosure, layout), `CategoryFilter` (toggle buttons),
+  `StyleCatalog` (native radio group: arrow keys, one tab stop, selected ring + check, "preview
+  ready" mark, Premium badge), `PreviewPanel` (original vs result, progress bar with stage text and
+  Cancel, "Mock preview · not AI" badge, circular mini preview, Show original toggle, Regenerate,
+  errors with Try again and a hint after 3 failures), polite live-region announcement on success.
+
+**Honesty about the mock** — shown in three places: a "Preview mode — not AI" note at the top of
+the step (rendered whenever `provider.kind === 'mock'`), a "Mock preview · not AI" badge on every
+mock result (and "(mock preview)" in its alt text), and progress text that says "Applying preview
+filter on your device…".
+
+**`src/features/studio/`** — `StudioFlow` runs photo → style with a shared `StudioProgress`;
+`CropResult` now has a "Choose a style" button.
+
+### Files
+
+Created: `src/features/styles/**` (catalog, types, messages, store, hooks/useGeneration,
+generation/{types,mockProvider,effects,render,ProviderContext,providerContext},
+components/{StyleStep,StyleCatalog,CategoryFilter,PreviewPanel}, index, 5 test files),
+`src/features/studio/{StudioFlow,StudioProgress,index}.tsx|ts` + `StudioFlow.test.tsx`,
+`src/components/avatar/index.ts`, `src/test/controlledProvider.ts`.
+
+Moved: `AvatarArt`, `AvatarFrame`, `pixel-portrait(+test)`, avatar `types` →
+`src/components/avatar/`; `Notice`, `StepHeading` → `src/components/ui/`.
+
+Modified: `CaptureFlow` (props `onContinue`, `onStepChange`, `focusOnMount`; progress removed),
+`CropResult` (continue button), `StudioPage` (renders `StudioFlow`, wider container), landing
+imports, `components/ui/index.ts`, docs.
+
+### Verification (run 2026-11-13)
+
+| Command                | Result                                                    |
+| ---------------------- | --------------------------------------------------------- |
+| `npm run typecheck`    | ✅ No errors                                              |
+| `npm run lint`         | ✅ No errors or warnings                                  |
+| `npm run format:check` | ✅ All files formatted                                    |
+| `npm test`             | ✅ 19 files, 133 tests passed                             |
+| `npm run build`        | ✅ JS 452.5 kB (140.8 kB gzip), CSS 41.8 kB (8.6 kB gzip) |
+
+Tests use a controllable fake provider to assert progress, success labelling, cancel (signal
+aborted), retryable vs non-retryable errors, the 3-attempt hint, cached results, progress only on
+the generating style, abort on unmount, no network, and axe before/during/after generation.
+
+Manual browser checks (production build, headless Chrome, throwaway script):
+
+- Upload → crop → Choose a style → heading focused; Bold Cartoon mock result in ~0.8–1.3 s with
+  badge; 8-bit pixel mock in ~1.9–2.4 s; arrow keys move the radio selection; Pixel Art filter;
+  cached result shown instantly; zero external requests (desktop and mobile).
+- `?mockFailRate=1` → "Generation failed" + Try again; after 3 attempts the hint appears.
+- Cancel returns to the Generate button.
+- No horizontal overflow at 360/390/820/1280 px (fixed a fieldset `min-width` overflow found here).
+- Phase 2 flow re-run: still works end to end.
+
+### Limitations / notes
+
+- The mock is colour filtering only; results look nothing like real AI styles, by design.
+- Mock rendering runs on the main thread (~0.3–0.8 s at 1080 px); fine for a mock, a real
+  provider will run server-side.
+- Premium styles are only badged; nothing is gated until Phase 7 (UI says so).
+- Generated results live in memory for the tab, like the photo.
+- No "Continue to frames" yet — Phase 4.

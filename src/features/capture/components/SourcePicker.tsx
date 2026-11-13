@@ -1,9 +1,9 @@
+import { Notice } from '@/components/ui'
 import { Camera, ImageUp, Loader2, Lock } from 'lucide-react'
 import { useState, type DragEvent } from 'react'
 import { cn } from '@/lib/cn'
 import { PHOTO_ERROR_MESSAGES } from '../lib/messages'
 import type { PhotoErrorKind } from '../types'
-import { Notice } from './Notice'
 
 export interface SourcePickerProps {
   onCamera: () => void

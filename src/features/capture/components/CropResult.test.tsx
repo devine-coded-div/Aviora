@@ -16,6 +16,7 @@ describe('CropResult', () => {
     render(
       <CropResult
         cropped={cropped(false)}
+        onContinue={vi.fn<() => void>()}
         onAdjust={vi.fn<() => void>()}
         onStartOver={vi.fn<() => void>()}
       />,
@@ -33,6 +34,7 @@ describe('CropResult', () => {
     render(
       <CropResult
         cropped={cropped(true)}
+        onContinue={vi.fn<() => void>()}
         onAdjust={vi.fn<() => void>()}
         onStartOver={vi.fn<() => void>()}
       />,

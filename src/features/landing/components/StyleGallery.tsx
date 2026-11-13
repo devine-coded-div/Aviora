@@ -2,8 +2,7 @@ import { Crown } from 'lucide-react'
 import { Badge, Container, SectionHeading } from '@/components/ui'
 import { SECTION_IDS } from '@/lib/constants'
 import { FRAME_SHOWCASE, STYLE_SHOWCASE } from '../content'
-import { AvatarArt } from './AvatarArt'
-import { AvatarFrame } from './AvatarFrame'
+import { AvatarArt, AvatarFrame } from '@/components/avatar'
 
 export function StyleGallery() {
   const headingId = `${SECTION_IDS.styles}-title`

@@ -1,6 +1,6 @@
 import { useId } from 'react'
-import { PIXEL_GRID, PIXEL_PALETTE } from '../pixel-portrait'
-import type { AvatarArtStyle } from '../types'
+import { PIXEL_GRID, PIXEL_PALETTE } from './pixel-portrait'
+import type { AvatarArtStyle } from './types'
 
 /**
  * Hand-drawn SVG portraits of one invented person in each art style.

@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { cn } from '@/lib/cn'
+import { StepHeading } from '@/components/ui'
+import { useEffect, useRef, useState } from 'react'
 import { FILE_INPUT_ACCEPT } from '../constants'
 import { PhotoError } from '../lib/image'
 import { preparePhoto } from '../lib/preparePhoto'
@@ -10,9 +10,9 @@ import { CropResult } from './CropResult'
 import { PhotoCropper } from './PhotoCropper'
 import { PhotoReview } from './PhotoReview'
 import { SourcePicker } from './SourcePicker'
-import { StepHeading } from './StepHeading'
 
-type Step = 'source' | 'camera' | 'review' | 'crop' | 'done'
+export type CaptureStep = 'source' | 'camera' | 'review' | 'crop' | 'done'
+type Step = CaptureStep
 
 const STEP_COPY: Record<Step, { title: string; description: string }> = {
   source: {
@@ -34,14 +34,17 @@ const STEP_COPY: Record<Step, { title: string; description: string }> = {
   },
 }
 
-const PROGRESS = ['Photo', 'Crop', 'Style', 'Frame', 'Download'] as const
-
-function progressIndex(step: Step) {
-  return step === 'crop' || step === 'done' ? 1 : 0
+export interface CaptureFlowProps {
+  /** Called from the result screen to move on to styles. */
+  onContinue: () => void
+  /** Lets the studio show overall progress. */
+  onStepChange?: (step: CaptureStep) => void
+  /** Focus the step heading on first render (e.g. when returning from a later step). */
+  focusOnMount?: boolean
 }
 
 /** Orchestrates capture/upload → review → crop. All work happens in the browser. */
-export function CaptureFlow() {
+export function CaptureFlow({ onContinue, onStepChange, focusOnMount = false }: CaptureFlowProps) {
   const original = usePhotoStore((s) => s.original)
   const cropSettings = usePhotoStore((s) => s.crop)
   const cropped = usePhotoStore((s) => s.cropped)
@@ -53,7 +56,7 @@ export function CaptureFlow() {
   const [step, setStepState] = useState<Step>(() =>
     cropped ? 'done' : original ? 'crop' : 'source',
   )
-  const [moved, setMoved] = useState(false)
+  const [moved, setMoved] = useState(focusOnMount)
   const [busy, setBusy] = useState(false)
   const [photoError, setPhotoError] = useState<PhotoErrorKind | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -91,41 +94,14 @@ export function CaptureFlow() {
     goTo('source')
   }
 
+  useEffect(() => {
+    onStepChange?.(step)
+  }, [step, onStepChange])
+
   const copy = STEP_COPY[step]
-  const current = progressIndex(step)
 
   return (
     <div className="flex flex-col gap-8">
-      <ol
-        aria-label="Progress"
-        className="flex items-center justify-center gap-2 text-xs sm:gap-3 sm:text-sm"
-      >
-        {PROGRESS.map((label, index) => (
-          <li
-            key={label}
-            aria-current={index === current ? 'step' : undefined}
-            className={cn(
-              'flex items-center gap-2',
-              index === current ? 'font-medium text-fg' : 'text-fg-subtle',
-            )}
-          >
-            <span
-              aria-hidden="true"
-              className={cn(
-                'inline-flex size-6 items-center justify-center rounded-full border text-[0.7rem]',
-                index < current && 'border-accent bg-accent/15 text-accent',
-                index === current && 'border-accent-strong bg-accent-strong text-white',
-                index > current && 'border-border',
-              )}
-            >
-              {index + 1}
-            </span>
-            <span className={cn(index !== current && 'hidden sm:inline')}>{label}</span>
-            {index < current && <span className="sr-only">(done)</span>}
-          </li>
-        ))}
-      </ol>
-
       <StepHeading focusOnMount={moved} key={step} description={copy.description}>
         {copy.title}
       </StepHeading>
@@ -183,6 +159,7 @@ export function CaptureFlow() {
       {step === 'done' && cropped && (
         <CropResult
           cropped={cropped}
+          onContinue={onContinue}
           onAdjust={() => {
             clearCropped()
             goTo('crop')

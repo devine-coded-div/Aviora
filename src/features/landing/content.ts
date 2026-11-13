@@ -5,7 +5,7 @@
  * reviewed against the real backend (Phase 6) and payments (Phase 7) implementation and the
  * published privacy policy.
  */
-import type { AvatarArtStyle, FrameStyle } from './types'
+import type { AvatarArtStyle, FrameStyle } from '@/components/avatar'
 
 export interface StyleShowcase {
   id: AvatarArtStyle

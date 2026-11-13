@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { cn } from '@/lib/cn'
-import type { FrameStyle } from '../types'
+import type { FrameStyle } from './types'
 
 /**
  * CSS approximation of the frame treatments, for marketing previews only.

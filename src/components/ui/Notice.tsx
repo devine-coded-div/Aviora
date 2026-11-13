@@ -1,10 +1,14 @@
 import { AlertTriangle, Info } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/cn'
-import type { Message } from '../lib/messages'
+
+export interface NoticeMessage {
+  title: string
+  description: string
+}
 
 export interface NoticeProps {
-  message: Message
+  message: NoticeMessage
   tone?: 'error' | 'warning' | 'info'
   children?: ReactNode
   className?: string

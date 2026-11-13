@@ -1,8 +1,7 @@
 import { ArrowRight } from 'lucide-react'
 import { ButtonLink, Container } from '@/components/ui'
 import { ROUTES } from '@/lib/constants'
-import { AvatarArt } from './AvatarArt'
-import { AvatarFrame } from './AvatarFrame'
+import { AvatarArt, AvatarFrame } from '@/components/avatar'
 
 export function FinalCta() {
   return (

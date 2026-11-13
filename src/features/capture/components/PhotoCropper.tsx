@@ -1,11 +1,10 @@
 import { Check, ImageUp, Loader2, Minus, Plus, RotateCcw } from 'lucide-react'
 import { useCallback, useId, useState } from 'react'
 import Cropper, { type Area, type Point } from 'react-easy-crop'
-import { Button } from '@/components/ui'
+import { Button, Notice } from '@/components/ui'
 import { CROP_MAX_ZOOM, CROP_MIN_ZOOM, CROP_OUTPUT_SIZE_PX } from '../constants'
 import { decodeImage, isLowResolutionCrop, renderCroppedSquare } from '../lib/image'
 import type { CroppedPhoto, CropSettings, SourcePhoto } from '../types'
-import { Notice } from './Notice'
 import { SafeAreaOverlay } from './SafeAreaOverlay'
 
 export interface PhotoCropperProps {

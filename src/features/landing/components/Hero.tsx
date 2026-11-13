@@ -2,8 +2,7 @@ import { ArrowRight, Check, Sparkles } from 'lucide-react'
 import { Badge, ButtonLink, Container } from '@/components/ui'
 import { ROUTES, SECTION_IDS } from '@/lib/constants'
 import { PLATFORMS } from '../content'
-import { AvatarArt } from './AvatarArt'
-import { AvatarFrame } from './AvatarFrame'
+import { AvatarArt, AvatarFrame } from '@/components/avatar'
 
 const highlights = ['No sign-up to try', '1080 × 1080 export', 'Works on any phone']
 

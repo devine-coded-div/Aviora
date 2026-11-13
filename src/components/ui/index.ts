@@ -4,3 +4,5 @@ export { buttonClasses, type ButtonSize, type ButtonVariant } from './button-var
 export { Container } from './Container'
 export { Logo } from './Logo'
 export { SectionHeading, type SectionHeadingProps } from './SectionHeading'
+export { Notice, type NoticeMessage, type NoticeProps } from './Notice'
+export { StepHeading } from './StepHeading'

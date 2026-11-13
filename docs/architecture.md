@@ -39,9 +39,20 @@ Current features:
 - `landing` — marketing page: content, SVG avatar illustrations, sections.
 - `capture` — camera/upload, validation, cropping. Exposes `CaptureFlow` and `usePhotoStore`
   (original photo, crop settings, 1080×1080 cropped JPEG) for later editor steps.
+- `styles` — style catalog, `AvatarGenerationProvider` interface, mock provider, style picker and
+  preview. Providers are injected with `GenerationProviderScope`.
+- `studio` — orchestrates editor steps (`StudioFlow`) and overall progress.
 
-Planned features: `styles` (avatar style selection and
-generation), `frames` (rings, gradients, effects), `export` (preview and 1080×1080 rendering).
+Shared visuals live in `src/components/avatar/` (SVG illustrations, CSS frame previews).
+
+### Generation providers
+
+`AvatarGenerationProvider.generate()` takes the cropped image, a style id, an `AbortSignal` and a
+progress callback, and resolves with an image or rejects with a typed `GenerationError`.
+`info.kind === 'mock'` makes the UI show "not AI" labelling. The Phase 6 provider will call our own
+backend (never an AI vendor directly from the browser) and be passed to `GenerationProviderScope`.
+
+Planned features: `frames` (rings, gradients, effects), `export` (preview and 1080×1080 rendering).
 
 ## Rules of thumb
 

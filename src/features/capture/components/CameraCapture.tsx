@@ -1,11 +1,10 @@
 import { ArrowLeft, Camera, Loader2, RefreshCcw, ShieldCheck, SwitchCamera } from 'lucide-react'
 import { useState } from 'react'
-import { Button } from '@/components/ui'
+import { Button, Notice } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { useCamera } from '../hooks/useCamera'
 import { CAMERA_ERROR_MESSAGES } from '../lib/messages'
 import type { CameraErrorKind } from '../types'
-import { Notice } from './Notice'
 import { SafeAreaOverlay } from './SafeAreaOverlay'
 
 export interface CameraCaptureProps {
