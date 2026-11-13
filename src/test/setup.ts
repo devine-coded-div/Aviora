@@ -16,6 +16,13 @@ window.matchMedia ??= ((query: string) => ({
   dispatchEvent: vi.fn<() => boolean>(),
 })) as unknown as typeof window.matchMedia
 
+// jsdom has no object URLs; hand out unique fake ones so revocation can be asserted.
+let objectUrlCounter = 0
+URL.createObjectURL = vi.fn<(obj: Blob | MediaSource) => string>(
+  () => `blob:test/${++objectUrlCounter}`,
+)
+URL.revokeObjectURL = vi.fn<(url: string) => void>()
+
 afterEach(() => {
   cleanup()
 })

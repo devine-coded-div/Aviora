@@ -5,8 +5,8 @@ Each phase is implemented on its own, verified, documented here, and then paused
 | Phase | Scope                                           | Status                  |
 | ----- | ----------------------------------------------- | ----------------------- |
 | 0     | Project foundation                              | ✅ Complete             |
-| 1     | Design system and landing page                  | ✅ Complete — in review |
-| 2     | Camera capture and image upload                 | ⏳ Not started          |
+| 1     | Design system and landing page                  | ✅ Complete             |
+| 2     | Camera capture and image upload                 | ✅ Complete — in review |
 | 3     | Avatar style selection and mock generation      | ⏳ Not started          |
 | 4     | Frame customization editor                      | ⏳ Not started          |
 | 5     | Preview and high-resolution export              | ⏳ Not started          |
@@ -95,7 +95,7 @@ Manually checked the production build in headless Chrome at 1280×800 and 390×8
 
 ## Phase 1 — Design system and landing page
 
-**Date:** 2026-11-13 · **Status:** Complete, awaiting approval
+**Date:** 2026-11-13 · **Status:** Complete (approved)
 
 ### Objectives
 
@@ -197,3 +197,109 @@ part of the repo):
 - axe in jsdom can't check colour contrast; it was verified separately (see above).
 - No Playwright E2E suite in the repo yet (planned with the editor flow).
 - The JS bundle is still a single chunk; the editor route will be lazy-loaded once it exists.
+
+---
+
+## Deployment (added between Phases 1 and 2)
+
+- Repo: `devine-coded-div/Aviora`. Every push to `main` runs typecheck, lint, format check, tests
+  and build in GitHub Actions, then deploys to GitHub Pages: https://devine-coded-div.github.io/Aviora/
+- `BASE_PATH` (set in CI from the repo name) drives Vite's `base` and the router `basename`;
+  `404.html` is a copy of `index.html` so deep links load.
+- Pages must be enabled once in repo settings (Source: GitHub Actions); the default token can't.
+
+---
+
+## Phase 2 — Camera capture and image upload
+
+**Date:** 2026-11-13 · **Status:** Complete, awaiting approval
+
+### Objectives
+
+- Take a selfie with `getUserMedia` (explicit, user-initiated permission) or upload a file.
+- Camera switching where supported; preview, retake; square cropping with react-easy-crop and a
+  circular safe-area overlay.
+- Handle denied permission, missing/busy cameras, unsupported browsers, unsupported formats and
+  large files.
+- Keep the original photo in temporary client state. **No uploads to any server.**
+
+### Dependencies added
+
+| Package         | Version | Why                                                  |
+| --------------- | ------- | ---------------------------------------------------- |
+| react-easy-crop | 6.2.5   | Crop UI: drag, pinch/scroll zoom, keyboard arrows    |
+| zustand         | 5.1.0   | In-memory photo state shared with later editor steps |
+
+### What was built (`src/features/capture/`)
+
+- **Flow** (`CaptureFlow`): source → camera (primer → live) → review → crop → result, with a
+  5-step progress indicator (Photo, Crop, Style, Frame, Download) and focus moved to each step's
+  heading after user actions.
+- **Explicit permission**: choosing "Take a selfie" shows a primer; `getUserMedia` runs only on
+  "Turn on camera". The camera is stopped after capture, on Back, and on unmount (leaving the page).
+- **Camera** (`useCamera`, `lib/camera.ts`): front camera by default (`facingMode: ideal`), up to
+  1920 px; retries without resolution hints on `OverconstrainedError`; switch button only when
+  more than one camera exists; front-camera shots mirrored to match the preview; stale requests
+  cancelled.
+- **Upload**: button (hidden native input) and drag-and-drop. JPG/PNG/WebP; HEIC/HEIF accepted
+  only if the browser can decode it (Safari). Limits: 25 MB, min side 256 px, max 50 MP.
+  Empty-MIME files resolved by extension. Unsupported-browser fallback: native camera app via
+  `<input capture="user">`.
+- **Crop** (`PhotoCropper`): square, `objectFit="cover"`, zoom 1–4× (slider + buttons), reset,
+  arrow-key panning with an accessible label/description, dashed circular guide with dimmed
+  corners. Output rendered locally to a 1080×1080 JPEG; crops narrower than 540 px are flagged as
+  low resolution.
+- **Result** (`CropResult`): square crop plus profile/feed/comment-size circle previews, "Adjust
+  crop" (restores position and zoom), "Use a different photo".
+- **State** (`store.ts`): `original` (untouched Blob + object URL + dimensions + source),
+  `crop` settings, `cropped` result. Not persisted. Object URLs revoked on replace/reset.
+- **Errors** (`lib/messages.ts`): plain-language title + next step for every error kind.
+
+Studio page now renders the capture flow (visually hidden `h1`, step `h2`s).
+
+### Files
+
+Created: `src/features/capture/` — `types.ts`, `constants.ts`, `store.ts`, `index.ts`,
+`lib/{validateImageFile,image,preparePhoto,camera,messages}.ts`, `hooks/useCamera.ts`,
+`components/{CaptureFlow,SourcePicker,CameraCapture,PhotoReview,PhotoCropper,CropResult,Notice,SafeAreaOverlay,StepHeading}.tsx`,
+tests `store.test.ts`, `lib/{validateImageFile,camera,preparePhoto}.test.ts`,
+`components/{CaptureFlow,CropResult}.test.tsx`; `src/test/media.ts`.
+
+Modified: `src/pages/StudioPage.tsx`, `src/test/setup.ts` (object URL stubs),
+`src/test/renderRoute.tsx` (`applyAccept: false`), `vitest.config.ts` (`clearMocks`),
+`package.json`, docs.
+
+### Verification (run 2026-11-13)
+
+| Command                | Result                                                    |
+| ---------------------- | --------------------------------------------------------- |
+| `npm run typecheck`    | ✅ No errors                                              |
+| `npm run lint`         | ✅ No errors or warnings                                  |
+| `npm run format:check` | ✅ All files formatted                                    |
+| `npm test`             | ✅ 13 files, 86 tests passed                              |
+| `npm run build`        | ✅ JS 433.3 kB (135.0 kB gzip), CSS 37.8 kB (8.0 kB gzip) |
+
+Component tests assert that no `fetch`/XHR happens anywhere in the flow, that `getUserMedia` is
+not called before the explicit click, that tracks stop after capture and on navigation, and run
+axe on the first step and the denied-permission state.
+
+Manual browser checks (production build, headless Chrome with `--use-fake-device-for-media-stream`,
+throwaway script, not in repo):
+
+- Camera: primer → live 1920×1920 stream → capture → review → retake → capture → crop
+  (arrow keys + zoom) → 1080×1080 result; camera unmounted after capture; zero external requests.
+- Permission denied (no auto-accept): "Camera access is blocked" with Try again / Upload.
+- Uploads: 200×150 PNG → too small; .txt → unsupported; fake .heic in Chrome → HEIC message;
+  corrupt JPG → couldn't open; 26 MB → too large; valid 1600×1200 JPG → crop → result → adjust.
+- Screens reviewed at 390×844 and 1280×900.
+
+### Limitations / notes
+
+- The fake camera has one device, so camera switching was verified in unit/component tests only.
+  Real-device testing on iOS Safari and Android Chrome is still needed.
+- HEIC works only where the browser decodes it (Safari); elsewhere users get conversion advice.
+- The photo lives in memory for the tab; a refresh clears it (by design, nothing is stored).
+- Cropping has no rotation control yet.
+- react-easy-crop injects a small `<style>` tag at runtime; account for this when a CSP is added
+  (Phase 8).
+- No Playwright suite in the repo yet; the fake-camera script is a good basis for one.

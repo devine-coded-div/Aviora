@@ -10,6 +10,7 @@ export default mergeConfig(
       include: ['src/**/*.{test,spec}.{ts,tsx}'],
       css: false,
       restoreMocks: true,
+      clearMocks: true,
     },
   }),
 )

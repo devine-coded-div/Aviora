@@ -3,7 +3,7 @@
 A profile picture studio: capture or upload a photo, turn it into a stylized avatar, frame it, and
 export a 1080×1080 image for Instagram and other social platforms.
 
-> Status: **Phase 1 (design system and landing page)**. See [docs/phases.md](docs/phases.md).
+> Status: **Phase 2 (camera capture and image upload)**. Live: https://devine-coded-div.github.io/Aviora/ · See [docs/phases.md](docs/phases.md).
 
 ## Requirements
 

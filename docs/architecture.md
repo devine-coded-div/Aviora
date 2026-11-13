@@ -34,9 +34,13 @@ src/features/<feature>/
 └─ index.ts      Public API; other code imports only from here
 ```
 
-Current features: `landing` (marketing page: content, SVG avatar illustrations, sections).
+Current features:
 
-Planned features: `capture` (camera + upload + crop), `styles` (avatar style selection and
+- `landing` — marketing page: content, SVG avatar illustrations, sections.
+- `capture` — camera/upload, validation, cropping. Exposes `CaptureFlow` and `usePhotoStore`
+  (original photo, crop settings, 1080×1080 cropped JPEG) for later editor steps.
+
+Planned features: `styles` (avatar style selection and
 generation), `frames` (rings, gradients, effects), `export` (preview and 1080×1080 rendering).
 
 ## Rules of thumb

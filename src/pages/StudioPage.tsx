@@ -1,31 +1,14 @@
-import { ArrowLeft, Camera, Upload } from 'lucide-react'
-import { ButtonLink, Container } from '@/components/ui'
-import { APP_NAME, ROUTES } from '@/lib/constants'
+import { Container } from '@/components/ui'
+import { CaptureFlow } from '@/features/capture'
+import { APP_NAME } from '@/lib/constants'
 
-/**
- * Editor entry point. Placeholder until capture/upload (Phase 2), styles (Phase 3),
- * frames (Phase 4) and export (Phase 5) are built.
- */
+/** Avatar editor. Phase 2: photo capture/upload and cropping. Styles, frames and export follow. */
 export function StudioPage() {
   return (
-    <Container className="flex flex-1 flex-col items-center justify-center gap-6 py-16 text-center">
+    <Container className="flex max-w-3xl flex-1 flex-col gap-6 py-8 sm:py-12">
       <title>{`Studio — ${APP_NAME}`}</title>
-      <div aria-hidden="true" className="flex gap-3">
-        <span className="inline-flex size-14 items-center justify-center rounded-2xl bg-surface-raised text-fg-muted">
-          <Camera className="size-6" />
-        </span>
-        <span className="inline-flex size-14 items-center justify-center rounded-2xl bg-surface-raised text-fg-muted">
-          <Upload className="size-6" />
-        </span>
-      </div>
-      <h1 className="text-3xl font-semibold tracking-tight">Studio</h1>
-      <p className="max-w-md text-pretty text-fg-muted">
-        The avatar editor is being built. Taking a selfie and uploading a photo are coming next.
-      </p>
-      <ButtonLink to={ROUTES.home} variant="secondary">
-        <ArrowLeft aria-hidden="true" />
-        Back to home
-      </ButtonLink>
+      <h1 className="sr-only">Studio</h1>
+      <CaptureFlow />
     </Container>
   )
 }
