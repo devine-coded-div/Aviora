@@ -1,0 +1,29 @@
+/** 16×16 pixel portrait. One character per cell; see PIXEL_PALETTE. */
+export const PIXEL_GRID: readonly string[] = [
+  'BBBBBBBBBBBBBBBB',
+  'BBBBBHHHHHHBBBBB',
+  'BBBBHHHHHHHHBBBB',
+  'BBBHHHHHHHHHHBBB',
+  'BBBHHSSSSSSHHBBB',
+  'BBBHSSSSSSSSHBBB',
+  'BBBHSEESSEESHBBB',
+  'BBBBSSSSSSSSBBBB',
+  'BBBBSSSDDSSSBBBB',
+  'BBBBSSMMMMSSBBBB',
+  'BBBBBSSSSSSBBBBB',
+  'BBBBBBDSSDBBBBBB',
+  'BBBBCCCSSCCCBBBB',
+  'BBBCCCCCCCCCCBBB',
+  'BBCCCCCCCCCCCCBB',
+  'BBCCCCCCCCCCCCBB',
+]
+
+export const PIXEL_PALETTE: Readonly<Record<string, string>> = {
+  B: '#1e1b4b',
+  H: '#f59e0b',
+  S: '#fcd5b4',
+  D: '#e5a982',
+  E: '#0f172a',
+  M: '#be123c',
+  C: '#10b981',
+}
