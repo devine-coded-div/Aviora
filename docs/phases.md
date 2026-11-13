@@ -7,8 +7,8 @@ Each phase is implemented on its own, verified, documented here, and then paused
 | 0     | Project foundation                              | ✅ Complete             |
 | 1     | Design system and landing page                  | ✅ Complete             |
 | 2     | Camera capture and image upload                 | ✅ Complete             |
-| 3     | Avatar style selection and mock generation      | ✅ Complete — in review |
-| 4     | Frame customization editor                      | ⏳ Not started          |
+| 3     | Avatar style selection and mock generation      | ✅ Complete             |
+| 4     | Frame customization editor                      | ✅ Complete — in review |
 | 5     | Preview and high-resolution export              | ⏳ Not started          |
 | 6     | Backend and real AI generation                  | ⏳ Not started          |
 | 7     | Payments and usage limits                       | ⏳ Not started          |
@@ -308,7 +308,7 @@ throwaway script, not in repo):
 
 ## Phase 3 — Avatar style selection and mock generation
 
-**Date:** 2026-11-13 · **Status:** Complete, awaiting approval
+**Date:** 2026-11-13 · **Status:** Complete (approved)
 
 ### Objectives
 
@@ -410,3 +410,99 @@ Manual browser checks (production build, headless Chrome, throwaway script):
 **Review fix (2026-11-13):** the compare button's label now flips between "Show original" and
 "Show styled" (previously it stayed "Show original" with only `aria-pressed` changing, which
 wasn't visible). Verified in the browser and covered by the compare test.
+
+---
+
+## Phase 4 — Frame customization editor
+
+**Date:** 2026-11-13 · **Status:** Complete, awaiting approval
+
+### Objectives
+
+- Data-driven frame editor: flame overlays, dark theme, solid rings, gradients, neon, minimal
+  borders (plus "No frame").
+- Controls for colour, thickness, opacity and per-frame effects.
+- Canvas API composition with deterministic rendering.
+- Frames aligned with the circular safe area on desktop and mobile.
+- Undo/redo/reset.
+
+No new dependencies.
+
+### What was built (`src/features/frames/`)
+
+- **Model** (`types.ts`): one flat `FrameSettings` (kind, color, color2, thickness, opacity,
+  effect, angle, background). Lengths are fractions of the square's side.
+- **Presets** (`presets.ts`): 7 presets, each with defaults and a list of controls
+  (`range` with min/max/step/format, or `color` with named swatches). The editor UI and value
+  clamping (`sanitize`) are generated from this data.
+  - Flame: core colour, tip colour, flame height, base ring, opacity, background.
+  - Dark theme: ring tone, vignette, thickness, opacity, background.
+  - Solid ring / Minimal: colour, thickness (minimal: line weight), opacity, background.
+  - Gradient: start/end colours, direction (°), thickness, opacity, background.
+  - Neon: colour, glow, thickness, opacity, background.
+- **Layout** (`layout.ts`): pure geometry. The safe area is the circle inscribed in the square
+  (radius 0.5). For each kind, the ring and any effect reach (neon glow, flame height) are
+  reserved _inside_ that circle, so nothing drawn crosses it at any setting; the photo fills
+  what's left.
+- **Renderer** (`render/drawAvatar.ts`): background → clipped, centre-cropped photo → vignette
+  (dark) → frame layer at the chosen opacity. Neon uses `shadowBlur` sized to its reserved reach;
+  flames are 30 bezier tongues from a seeded PRNG (mulberry32, fixed seed) in two gradient layers
+  plus a base ring. No `Math.random`, time or DPR inside the renderer.
+- **Preview** (`FrameCanvas`): backing store = CSS width × `devicePixelRatio` (ResizeObserver);
+  the safe-area guide is a CSS circle over the same box, so alignment holds by construction at
+  every size. Circle/square view toggle. Preset thumbnails render the user's own avatar.
+- **History** (`store.ts`): undo/redo/reset with a 50-step cap. Consecutive changes to the same
+  control within 800 ms (a slider drag, a colour-picker drag) merge into one step; releasing a
+  slider closes the step. Preset switches and resets are undoable. Buttons plus Ctrl/⌘+Z,
+  Ctrl/⌘+Shift+Z and Ctrl+Y (ignored while typing in text fields).
+- **Accessibility**: presets and swatches are native radio groups; sliders have labels, live value
+  output and `aria-valuetext` ("32 px at 1080 pixels"); the preview canvas has a generated text
+  alternative ("Your avatar with a neon frame in violet").
+- **Studio**: "Continue to frames" on the style step (disabled while generating), with a note
+  saying whether the styled preview or the plain crop will be framed. The frame step shows what is
+  being framed and keeps the "Mock preview · not AI" label for mock results.
+
+### Files
+
+Created: `src/features/frames/` — `types.ts`, `presets.ts`, `layout.ts`, `format.ts`,
+`describe.ts`, `store.ts`, `index.ts`, `render/drawAvatar.ts`, `hooks/useSourceImage.ts`,
+`components/{FrameStep,FrameCanvas,FramePresetPicker,FrameControls,HistoryControls}.tsx`; tests
+`presets.test.ts`, `layout.test.ts`, `store.test.ts`, `render/drawAvatar.test.ts`,
+`components/FrameStep.test.tsx`.
+
+Modified: `src/features/studio/StudioFlow.tsx` (+ test), `src/features/styles/components/StyleStep.tsx`
+(+ test; `onContinue`), `src/test/setup.ts` (quiet canvas/media stubs), docs.
+
+### Verification (run 2026-11-13)
+
+| Command                | Result                                                    |
+| ---------------------- | --------------------------------------------------------- |
+| `npm run typecheck`    | ✅ No errors                                              |
+| `npm run lint`         | ✅ No errors or warnings                                  |
+| `npm run format:check` | ✅ All files formatted                                    |
+| `npm test`             | ✅ 24 files, 235 tests passed                             |
+| `npm run build`        | ✅ JS 474.2 kB (146.9 kB gzip), CSS 43.9 kB (8.8 kB gzip) |
+
+Unit tests: the safe-area invariant for every min/max combination of every preset's sliders (41
+combinations); linear scaling of the layout; identical draw-call logs on repeated renders; every
+length argument exactly doubling between 500 px and 1000 px renders; flame points and neon glow
+inside the circle at maximum settings; history coalescing/undo/redo/reset/cap; editor behaviour and
+axe.
+
+Real Chrome (throwaway harness rendering the real `drawAvatar` with a real photo, then deleted):
+
+- 7 presets × {min, max, default}: two 1080×1080 renders are **pixel-identical** (`toDataURL`).
+- Same 21 cases: **zero pixels drawn outside the inscribed circle** (sampled every 2 px).
+- 540 px render vs 1080 px render downscaled: mean difference 0.07–0.6 levels (of 255).
+
+Real app (production build): safe-area guide offset from the canvas is 0.00 px at 360×740@2,
+390×844@3, 820×1180@2, 1440×900@1; backing store = CSS size × DPR; no horizontal overflow;
+undo×2 then redo×2 restores identical pixels; Ctrl+Z works; zero external requests. Phase 2 and 3
+browser checks re-run and still pass.
+
+### Limitations / notes
+
+- Thumbnails re-render with every preset (7 × 144 px canvases); fine on current devices.
+- Frame settings are kept in memory for the tab, like the photo.
+- Flame shapes are fixed (deterministic by design); there's no "shuffle flames" control.
+- No download yet — Phase 5 renders the same `drawAvatar` at 1080×1080 for export.

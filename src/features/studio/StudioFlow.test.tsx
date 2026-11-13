@@ -1,7 +1,7 @@
 import { screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { usePhotoStore } from '@/features/capture'
-import { useStyleStore } from '@/features/styles'
+import { MOCK_PROVIDER_INFO, useStyleStore } from '@/features/styles'
 import { ROUTES } from '@/lib/constants'
 import { renderRoute } from '@/test/renderRoute'
 
@@ -38,6 +38,43 @@ describe('StudioFlow', () => {
 
     await user.click(screen.getByRole('button', { name: 'Change photo' }))
     expect(screen.getByRole('heading', { name: 'Looking good' })).toHaveFocus()
+  })
+
+  it('continues from styles to frames, framing the photo when no style was generated', async () => {
+    const { user } = renderRoute(ROUTES.studio)
+    await user.click(screen.getByRole('button', { name: /choose a style/i }))
+    await user.click(screen.getByRole('button', { name: 'Continue to frames' }))
+
+    expect(screen.getByRole('heading', { name: 'Frame your avatar' })).toHaveFocus()
+    const progress = screen.getByRole('list', { name: 'Progress' })
+    expect(progress.querySelector('[aria-current="step"]')).toHaveTextContent('Frame')
+    expect(screen.getByText(/framing: your photo \(no style\)/i)).toBeInTheDocument()
+    expect(screen.queryByText('Mock preview · not AI')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Back to styles' }))
+    expect(screen.getByRole('heading', { name: 'Choose a style' })).toHaveFocus()
+  })
+
+  it('frames the selected style’s result, labelled as a mock', async () => {
+    useStyleStore.setState({
+      selectedId: 'anime-classic',
+      sourceUrl: 'blob:test/cropped',
+      results: {
+        'anime-classic': {
+          blob: new Blob(['s']),
+          url: 'blob:test/anime',
+          provider: MOCK_PROVIDER_INFO,
+          createdAt: 1,
+        },
+      },
+    })
+    const { user } = renderRoute(ROUTES.studio)
+    await user.click(screen.getByRole('button', { name: /choose a style/i }))
+    expect(screen.getByText('Uses your Anime Classic preview.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Continue to frames' }))
+
+    expect(screen.getByText(/framing: anime classic style/i)).toBeInTheDocument()
+    expect(screen.getAllByText('Mock preview · not AI').length).toBeGreaterThan(0)
   })
 
   it('shows the capture step when there is no photo yet', () => {

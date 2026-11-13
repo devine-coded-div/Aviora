@@ -21,7 +21,7 @@ function setup(provider: AvatarGenerationProvider, onBack = vi.fn<() => void>())
     // Wrapped in <main> like the real page, so axe's landmark rule applies realistically.
     <main>
       <GenerationProviderScope provider={provider}>
-        <StyleStep source={source} onBack={onBack} focusOnMount />
+        <StyleStep source={source} onBack={onBack} onContinue={vi.fn<() => void>()} focusOnMount />
       </GenerationProviderScope>
     </main>,
   )
@@ -211,7 +211,12 @@ describe('StyleStep — generation', () => {
     const user = userEvent.setup()
     const view = render(
       <GenerationProviderScope provider={fake.provider}>
-        <StyleStep source={source} onBack={vi.fn<() => void>()} focusOnMount={false} />
+        <StyleStep
+          source={source}
+          onBack={vi.fn<() => void>()}
+          onContinue={vi.fn<() => void>()}
+          focusOnMount={false}
+        />
       </GenerationProviderScope>,
     )
     await user.click(screen.getByRole('button', { name: 'Generate Bold Cartoon preview' }))

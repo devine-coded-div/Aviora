@@ -41,7 +41,9 @@ Current features:
   (original photo, crop settings, 1080×1080 cropped JPEG) for later editor steps.
 - `styles` — style catalog, `AvatarGenerationProvider` interface, mock provider, style picker and
   preview. Providers are injected with `GenerationProviderScope`.
-- `studio` — orchestrates editor steps (`StudioFlow`) and overall progress.
+- `frames` — frame presets (data), safe-area layout, deterministic canvas renderer
+  (`drawAvatar`), editor with undo/redo.
+- `studio` — orchestrates editor steps (`StudioFlow`: photo → style → frame) and overall progress.
 
 Shared visuals live in `src/components/avatar/` (SVG illustrations, CSS frame previews).
 
@@ -52,7 +54,7 @@ progress callback, and resolves with an image or rejects with a typed `Generatio
 `info.kind === 'mock'` makes the UI show "not AI" labelling. The Phase 6 provider will call our own
 backend (never an AI vendor directly from the browser) and be passed to `GenerationProviderScope`.
 
-Planned features: `frames` (rings, gradients, effects), `export` (preview and 1080×1080 rendering).
+Planned features: `export` (preview and 1080×1080 download).
 
 ## Rules of thumb
 
@@ -75,3 +77,10 @@ Tokens live in `src/styles/index.css` (`@theme`) and are used as Tailwind utilit
 
 Use the `@/` alias for anything outside the current folder (`@/lib/cn`, `@/features/frames`).
 The alias is defined in both `tsconfig.app.json` (`paths`) and `vite.config.ts` (`resolve.alias`).
+
+### Rendering and the safe area
+
+`drawAvatar(ctx, size, settings, source)` is the single renderer for previews, thumbnails and
+(Phase 5) export. All geometry is proportional to `size` and computed by `layout.ts`, which
+reserves room for glow/flames inside the inscribed circle. Keep any new frame effect inside
+`normalizedLayout(...).effectOuter` and add it to the layout tests.

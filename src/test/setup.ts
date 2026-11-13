@@ -16,6 +16,11 @@ window.matchMedia ??= ((query: string) => ({
   dispatchEvent: vi.fn<() => boolean>(),
 })) as unknown as typeof window.matchMedia
 
+// jsdom has no canvas or media playback. Stub them quietly; tests that need a canvas spy on
+// getContext themselves, and components treat a null context as "can't render yet".
+HTMLCanvasElement.prototype.getContext = (() => null) as unknown as HTMLCanvasElement['getContext']
+HTMLMediaElement.prototype.play = vi.fn<() => Promise<void>>(() => Promise.resolve())
+
 // jsdom has no object URLs; hand out unique fake ones so revocation can be asserted.
 let objectUrlCounter = 0
 URL.createObjectURL = vi.fn<(obj: Blob | MediaSource) => string>(

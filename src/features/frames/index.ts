@@ -1,0 +1,5 @@
+export { FrameStep, type FrameStepProps } from './components/FrameStep'
+export { FRAME_PRESETS, DEFAULT_FRAME, getPreset } from './presets'
+export { drawAvatar, type SourceImage } from './render/drawAvatar'
+export { useFrameStore } from './store'
+export type { FrameKind, FrameSettings } from './types'

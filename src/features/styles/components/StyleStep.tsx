@@ -1,4 +1,4 @@
-import { ArrowLeft, FlaskConical, Info } from 'lucide-react'
+import { ArrowLeft, ArrowRight, FlaskConical, Info } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Button, StepHeading } from '@/components/ui'
 import { getStyle, stylesInCategory } from '../catalog'
@@ -12,10 +12,12 @@ export interface StyleStepProps {
   /** The square cropped photo from the capture step. */
   source: { blob: Blob; url: string }
   onBack: () => void
+  /** Move on to frames (with the selected style's result if one was generated). */
+  onContinue: () => void
   focusOnMount: boolean
 }
 
-export function StyleStep({ source, onBack, focusOnMount }: StyleStepProps) {
+export function StyleStep({ source, onBack, onContinue, focusOnMount }: StyleStepProps) {
   const selectedId = useStyleStore((s) => s.selectedId)
   const results = useStyleStore((s) => s.results)
   const select = useStyleStore((s) => s.select)
@@ -100,7 +102,17 @@ export function StyleStep({ source, onBack, focusOnMount }: StyleStepProps) {
           <ArrowLeft aria-hidden="true" />
           Change photo
         </Button>
-        <p className="text-sm text-fg-muted">Next: frames and backgrounds — coming soon.</p>
+        <div className="flex flex-col items-stretch gap-1.5 sm:items-end">
+          <Button variant="primary" onClick={onContinue} disabled={job.status === 'running'}>
+            Continue to frames
+            <ArrowRight aria-hidden="true" />
+          </Button>
+          <p className="text-xs text-fg-muted sm:text-right">
+            {result
+              ? `Uses your ${style.name} preview.`
+              : 'No preview yet — your cropped photo will be framed as is.'}
+          </p>
+        </div>
       </div>
 
       <p aria-live="polite" className="sr-only">
