@@ -80,7 +80,15 @@ export function useGeneration(source: { blob: Blob; url: string }) {
 
   const dismissError = useCallback(() => setJob({ status: 'idle' }), [])
 
-  useEffect(() => () => controllerRef.current?.abort(), [])
+  // Cancel on unmount. Also return to idle so a remount (e.g. React StrictMode in dev) starts clean.
+  useEffect(
+    () => () => {
+      controllerRef.current?.abort()
+      controllerRef.current = null
+      setJob({ status: 'idle' })
+    },
+    [],
+  )
 
   return { job, generate, cancel, dismissError, provider: provider.info }
 }

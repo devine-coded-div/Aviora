@@ -22,6 +22,9 @@ export function StyleStep({ source, onBack, onContinue, focusOnMount }: StyleSte
   const results = useStyleStore((s) => s.results)
   const select = useStyleStore((s) => s.select)
   const syncSource = useStyleStore((s) => s.syncSource)
+  const pendingId = useStyleStore((s) => s.pendingId)
+  const clearPending = useStyleStore((s) => s.clearPending)
+  const storeSourceUrl = useStyleStore((s) => s.sourceUrl)
   const [category, setCategory] = useState<CategoryFilterValue>('all')
   const { job, generate, cancel, provider } = useGeneration(source)
   const [announcement, setAnnouncement] = useState('')
@@ -29,9 +32,21 @@ export function StyleStep({ source, onBack, onContinue, focusOnMount }: StyleSte
   // Results belong to one cropped photo; drop them if the photo changed.
   useEffect(() => syncSource(source.url), [source.url, syncSource])
 
+  // Changing the photo keeps the chosen style: re-apply it to the new photo automatically.
+  useEffect(() => {
+    if (!pendingId || storeSourceUrl !== source.url || job.status !== 'idle') return
+    clearPending()
+    if (pendingId === selectedId) void generate(pendingId)
+  }, [pendingId, storeSourceUrl, source.url, job.status, selectedId, clearPending, generate])
+
   const style = getStyle(selectedId)!
-  const result = results[selectedId]
-  const readyIds = useMemo(() => new Set(Object.keys(results)), [results])
+  // Results for an older photo are never shown over the new one (before syncSource runs).
+  const currentResults = useMemo(
+    () => (storeSourceUrl === source.url ? results : {}),
+    [storeSourceUrl, source.url, results],
+  )
+  const result = currentResults[selectedId]
+  const readyIds = useMemo(() => new Set(Object.keys(currentResults)), [currentResults])
   const jobForSelected =
     job.status !== 'idle' && job.styleId === selectedId ? job : { status: 'idle' as const }
 

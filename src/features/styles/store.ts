@@ -18,8 +18,18 @@ export interface StyleState {
   /** URL of the cropped photo the cached results were generated from. */
   sourceUrl: string | null
   results: Partial<Record<StyleId, StyleResult>>
+  /**
+   * Style to re-apply automatically after the photo changed. Set when the user had already
+   * generated the selected style for the previous photo — changing the photo shouldn't lose it.
+   */
+  pendingId: StyleId | null
   select: (id: StyleId) => void
-  /** Call with the current cropped photo URL; clears results if it changed. */
+  /** The pending re-apply has been started (or no longer applies). */
+  clearPending: () => void
+  /**
+   * Call with the current cropped photo URL. If it changed, cached results are dropped and, if
+   * the selected style had been applied, it's queued to be re-applied to the new photo.
+   */
   syncSource: (url: string) => void
   /** Stores a result if it still belongs to the current source; otherwise discards it. */
   setResult: (sourceUrl: string, id: StyleId, result: StyleResult) => void
@@ -34,14 +44,19 @@ export const useStyleStore = create<StyleState>()((set, get) => ({
   selectedId: DEFAULT_STYLE_ID,
   sourceUrl: null,
   results: {},
+  pendingId: null,
 
   select: (id) => set({ selectedId: id }),
+
+  clearPending: () => set({ pendingId: null }),
 
   syncSource: (url) => {
     const { sourceUrl, results } = get()
     if (sourceUrl === url) return
+    const { selectedId } = get()
+    const wasApplied = sourceUrl !== null && results[selectedId] !== undefined
     revokeAll(results)
-    set({ sourceUrl: url, results: {} })
+    set({ sourceUrl: url, results: {}, pendingId: wasApplied ? selectedId : null })
   },
 
   setResult: (sourceUrl, id, result) => {
@@ -53,11 +68,14 @@ export const useStyleStore = create<StyleState>()((set, get) => ({
     }
     const previous = state.results[id]
     if (previous) URL.revokeObjectURL(previous.url)
-    set({ results: { ...state.results, [id]: result } })
+    set({
+      results: { ...state.results, [id]: result },
+      pendingId: state.pendingId === id ? null : state.pendingId,
+    })
   },
 
   reset: () => {
     revokeAll(get().results)
-    set({ selectedId: DEFAULT_STYLE_ID, sourceUrl: null, results: {} })
+    set({ selectedId: DEFAULT_STYLE_ID, sourceUrl: null, results: {}, pendingId: null })
   },
 }))

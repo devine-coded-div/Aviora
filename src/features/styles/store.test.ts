@@ -11,7 +11,12 @@ const result = (url: string): StyleResult => ({
 })
 
 beforeEach(() => {
-  useStyleStore.setState({ selectedId: DEFAULT_STYLE_ID, sourceUrl: null, results: {} })
+  useStyleStore.setState({
+    selectedId: DEFAULT_STYLE_ID,
+    sourceUrl: null,
+    results: {},
+    pendingId: null,
+  })
 })
 
 describe('useStyleStore', () => {
@@ -55,5 +60,41 @@ describe('useStyleStore', () => {
     s.setResult('blob:same', 'anime-classic', result('blob:a'))
     s.syncSource('blob:same')
     expect(useStyleStore.getState().results['anime-classic']).toBeDefined()
+  })
+
+  it('keeps the selected style and queues it for re-apply when the photo changes', () => {
+    const s = useStyleStore.getState()
+    s.syncSource('blob:one')
+    s.select('anime-classic')
+    s.setResult('blob:one', 'anime-classic', result('blob:a'))
+    s.syncSource('blob:two')
+    expect(useStyleStore.getState()).toMatchObject({
+      selectedId: 'anime-classic',
+      pendingId: 'anime-classic',
+      results: {},
+    })
+  })
+
+  it('does not queue a re-apply when the selected style was never generated', () => {
+    const s = useStyleStore.getState()
+    s.syncSource('blob:one')
+    s.setResult('blob:one', 'pixel-8bit', result('blob:p'))
+    s.select('anime-classic')
+    s.syncSource('blob:two')
+    expect(useStyleStore.getState()).toMatchObject({ selectedId: 'anime-classic', pendingId: null })
+  })
+
+  it('does not queue anything for the very first photo', () => {
+    useStyleStore.getState().syncSource('blob:first')
+    expect(useStyleStore.getState().pendingId).toBeNull()
+  })
+
+  it('clears the pending re-apply once its result arrives', () => {
+    const s = useStyleStore.getState()
+    s.syncSource('blob:one')
+    s.setResult('blob:one', DEFAULT_STYLE_ID, result('blob:a'))
+    s.syncSource('blob:two')
+    s.setResult('blob:two', DEFAULT_STYLE_ID, result('blob:b'))
+    expect(useStyleStore.getState().pendingId).toBeNull()
   })
 })

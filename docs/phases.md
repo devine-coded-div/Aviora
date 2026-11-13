@@ -506,3 +506,12 @@ browser checks re-run and still pass.
 - Frame settings are kept in memory for the tab, like the photo.
 - Flame shapes are fixed (deterministic by design); there's no "shuffle flames" control.
 - No download yet — Phase 5 renders the same `drawAvatar` at 1080×1080 for export.
+
+**Review fix (2026-11-13): changing the photo keeps the style.** The selected style was already
+kept, but its result was discarded with the old photo, so users saw their plain new photo and a
+"Generate" button — it looked like the style was lost. Now, if the selected style had been
+applied, changing the photo (new upload or re-crop) re-applies that style to the new photo
+automatically (`pendingId` in the style store; cleared when it starts, on success, or if the user
+cancels). A style that was selected but never generated just stays selected. Results from the old
+photo are never shown over the new one. Verified in Chrome on the production build and on the
+dev server (React StrictMode double-mount); 7 new tests (242 total).

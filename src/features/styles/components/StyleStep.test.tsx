@@ -6,6 +6,7 @@ import { controlledProvider } from '@/test/controlledProvider'
 import { AVATAR_STYLES, DEFAULT_STYLE_ID } from '../catalog'
 import { GenerationProviderScope } from '../generation/ProviderContext'
 import type { AvatarGenerationProvider } from '../generation/types'
+import { MOCK_PROVIDER_INFO } from '../generation/mockProvider'
 import { useStyleStore } from '../store'
 import { StyleStep } from './StyleStep'
 
@@ -29,7 +30,12 @@ function setup(provider: AvatarGenerationProvider, onBack = vi.fn<() => void>())
 }
 
 beforeEach(() => {
-  useStyleStore.setState({ selectedId: DEFAULT_STYLE_ID, sourceUrl: null, results: {} })
+  useStyleStore.setState({
+    selectedId: DEFAULT_STYLE_ID,
+    sourceUrl: null,
+    results: {},
+    pendingId: null,
+  })
   vi.stubGlobal('fetch', fetchSpy)
 })
 
@@ -238,5 +244,72 @@ describe('StyleStep — generation', () => {
     expect(await axeViolations()).toEqual([])
     await act(async () => fake.succeed())
     expect(await axeViolations()).toEqual([])
+  })
+})
+
+describe('StyleStep — changing the photo', () => {
+  /** Simulate: the user applied Anime Classic to an earlier photo, then changed the photo. */
+  function appliedToPreviousPhoto() {
+    useStyleStore.setState({
+      selectedId: 'anime-classic',
+      sourceUrl: 'blob:test/old-photo',
+      results: {
+        'anime-classic': {
+          blob: new Blob(['old']),
+          url: 'blob:test/old-anime',
+          provider: MOCK_PROVIDER_INFO,
+          createdAt: 1,
+        },
+      },
+      pendingId: null,
+    })
+  }
+
+  it('keeps the selected style and re-applies it to the new photo automatically', async () => {
+    appliedToPreviousPhoto()
+    const fake = controlledProvider()
+    setup(fake.provider)
+
+    expect(screen.getByRole('radio', { name: /anime classic/i })).toBeChecked()
+    // The old photo's result is never shown over the new photo.
+    expect(screen.queryByRole('img', { name: /anime classic style/i })).not.toBeInTheDocument()
+    expect(fake.generate).toHaveBeenCalledOnce()
+    expect(fake.generate).toHaveBeenCalledWith(
+      expect.objectContaining({ image: source.blob, styleId: 'anime-classic' }),
+    )
+    expect(
+      screen.getByRole('progressbar', { name: 'Generating Anime Classic preview' }),
+    ).toBeInTheDocument()
+
+    await act(async () => fake.succeed())
+    expect(screen.getByRole('img', { name: /anime classic style/i })).toBeInTheDocument()
+    expect(fake.generate).toHaveBeenCalledOnce()
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:test/old-anime')
+  })
+
+  it('does not restart the re-apply after the user cancels it', async () => {
+    appliedToPreviousPhoto()
+    const fake = controlledProvider()
+    const { user } = setup(fake.provider)
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(
+      screen.getByRole('button', { name: 'Generate Anime Classic preview' }),
+    ).toBeInTheDocument()
+    expect(fake.generate).toHaveBeenCalledOnce()
+    expect(screen.getByRole('radio', { name: /anime classic/i })).toBeChecked()
+  })
+
+  it('keeps a selected-but-never-generated style selected without generating', () => {
+    useStyleStore.setState({
+      selectedId: 'pixel-16bit',
+      sourceUrl: 'blob:test/old-photo',
+      results: {},
+    })
+    const fake = controlledProvider()
+    setup(fake.provider)
+    expect(screen.getByRole('radio', { name: /16-bit/i })).toBeChecked()
+    expect(fake.generate).not.toHaveBeenCalled()
   })
 })
