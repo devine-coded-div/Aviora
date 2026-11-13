@@ -406,3 +406,7 @@ Manual browser checks (production build, headless Chrome, throwaway script):
 - Premium styles are only badged; nothing is gated until Phase 7 (UI says so).
 - Generated results live in memory for the tab, like the photo.
 - No "Continue to frames" yet — Phase 4.
+
+**Review fix (2026-11-13):** the compare button's label now flips between "Show original" and
+"Show styled" (previously it stayed "Show original" with only `aria-pressed` changing, which
+wasn't visible). Verified in the browser and covered by the compare test.

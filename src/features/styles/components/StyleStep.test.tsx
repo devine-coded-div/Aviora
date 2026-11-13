@@ -119,10 +119,15 @@ describe('StyleStep — generation', () => {
     await user.click(screen.getByRole('button', { name: 'Generate Bold Cartoon preview' }))
     await act(async () => fake.succeed())
 
-    const toggle = screen.getByRole('button', { name: 'Show original' })
-    await user.click(toggle)
-    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    const styled = screen.getByRole('img', { name: /bold cartoon style/i }).getAttribute('src')
+
+    await user.click(screen.getByRole('button', { name: 'Show original' }))
     expect(screen.getByRole('img', { name: /before styling/i })).toHaveAttribute('src', source.url)
+    expect(screen.getByText('Original')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Show styled' }))
+    expect(screen.getByRole('img', { name: /bold cartoon style/i })).toHaveAttribute('src', styled)
+    expect(screen.getByRole('button', { name: 'Show original' })).toBeInTheDocument()
   })
 
   it('cancels a running generation', async () => {
