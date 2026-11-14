@@ -51,6 +51,8 @@ export function mapServerError(code: string): GenerationErrorKind {
       return 'rate-limited'
     case 'unavailable':
       return 'network'
+    case 'payment-required':
+      return 'payment-required'
     case 'invalid-input':
     case 'content-rejected':
     case 'input-missing':
@@ -76,6 +78,8 @@ export interface ApiProviderOptions {
   /** Typical server time, used only to make the progress bar move smoothly. */
   expectedMs?: number
   now?: () => number
+  /** Extra headers for creating jobs (the account token). Read at call time. */
+  headers?: () => Record<string, string>
 }
 
 export function createApiProvider({
@@ -84,6 +88,7 @@ export function createApiProvider({
   fetch: fetchImpl = fetch,
   expectedMs = 15_000,
   now = Date.now,
+  headers = () => ({}),
 }: ApiProviderOptions): AvatarGenerationProvider {
   async function call(
     path: string,
@@ -132,7 +137,12 @@ export function createApiProvider({
       const form = new FormData()
       form.append('styleId', styleId)
       form.append('image', image, 'avatar.jpg')
-      const created = await call('/api/generations', { method: 'POST', body: form, ...abortable })
+      const created = await call('/api/generations', {
+        method: 'POST',
+        body: form,
+        headers: headers(),
+        ...abortable,
+      })
       if (!created.ok) await failFrom(created)
       const job = (await created.json()) as ServerJob
       const token = job.token!

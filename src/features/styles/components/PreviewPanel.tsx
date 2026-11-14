@@ -1,4 +1,4 @@
-import { Eye, FlaskConical, Loader2, RefreshCcw, Sparkles, X } from 'lucide-react'
+import { Crown, Eye, FlaskConical, Loader2, RefreshCcw, Sparkles, X } from 'lucide-react'
 import { useState } from 'react'
 import { Badge, Button, Notice } from '@/components/ui'
 import { cn } from '@/lib/cn'
@@ -17,6 +17,8 @@ export interface PreviewPanelProps {
   provider: ProviderInfo
   onGenerate: () => void
   onCancel: () => void
+  /** Shown for "payment-required" errors when billing is available. */
+  onGetCredits?: (() => void) | undefined
 }
 
 const MAX_SUGGESTED_RETRIES = 3
@@ -29,6 +31,7 @@ export function PreviewPanel({
   provider,
   onGenerate,
   onCancel,
+  onGetCredits,
 }: PreviewPanelProps) {
   const [showOriginal, setShowOriginal] = useState(false)
   const running = job.status === 'running'
@@ -120,6 +123,12 @@ export function PreviewPanel({
             GENERATION_ERROR_MESSAGES[error.kind === 'cancelled' ? 'provider-error' : error.kind]
           }
         >
+          {error.kind === 'payment-required' && onGetCredits && (
+            <Button size="sm" variant="gradient" onClick={onGetCredits}>
+              <Crown aria-hidden="true" />
+              Get credits
+            </Button>
+          )}
           {error.retryable && (
             <Button size="sm" variant="primary" onClick={onGenerate}>
               <RefreshCcw aria-hidden="true" />

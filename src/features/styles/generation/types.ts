@@ -43,7 +43,14 @@ export interface AvatarGenerationProvider {
 }
 
 export type GenerationErrorKind =
-  'cancelled' | 'invalid-input' | 'timeout' | 'rate-limited' | 'network' | 'provider-error'
+  | 'cancelled'
+  | 'invalid-input'
+  | 'timeout'
+  | 'rate-limited'
+  | 'network'
+  | 'provider-error'
+  /** No free generation or credit available (server-enforced). */
+  | 'payment-required'
 
 export class GenerationError extends Error {
   readonly kind: GenerationErrorKind
@@ -54,7 +61,7 @@ export class GenerationError extends Error {
     super(message ?? kind, options)
     this.name = 'GenerationError'
     this.kind = kind
-    this.retryable = kind !== 'invalid-input' && kind !== 'cancelled'
+    this.retryable = kind !== 'invalid-input' && kind !== 'cancelled' && kind !== 'payment-required'
   }
 }
 

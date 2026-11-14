@@ -24,17 +24,26 @@ be private** — objects are only ever served through the API.
 
 ## API
 
-| Method & path                     | Auth         | Purpose                                                        |
-| --------------------------------- | ------------ | -------------------------------------------------------------- |
-| `GET /api/health`                 | —            | Database reachability                                          |
-| `GET /api/provider`               | —            | Provider id, name, `kind` (`mock`/`ai`), styles, privacy terms |
-| `POST /api/generations`           | —            | Multipart `image` + `styleId` → `202` job + one-time `token`   |
-| `GET /api/generations/:id`        | Bearer token | Status: `pending`, `processing`, `completed`, `failed`         |
-| `GET /api/generations/:id/result` | Bearer token | The generated image (`Cache-Control: private, no-store`)       |
-| `POST /api/generations/:id/retry` | Bearer token | Retry a failed, retryable job (limited)                        |
-| `DELETE /api/generations/:id`     | Bearer token | Delete the job and all its images                              |
+| Method & path                         | Auth         | Purpose                                                               |
+| ------------------------------------- | ------------ | --------------------------------------------------------------------- |
+| `GET /api/health`                     | —            | Database reachability                                                 |
+| `GET /api/provider`                   | —            | Provider id, name, `kind` (`mock`/`ai`), styles, privacy terms        |
+| `POST /api/accounts`                  | —            | New anonymous account → `{ token, account }`                          |
+| `GET /api/account`                    | Account      | Credits, free generations left, premium style ids                     |
+| `GET /api/billing/packs`              | —            | Packs and prices (server-defined), test mode, public key id           |
+| `POST /api/billing/orders`            | Account      | `{ packId }` → Razorpay order (amount set by the server)              |
+| `GET /api/billing/orders/:id`         | Account      | Order status: `created`, `paid`, `failed`, `expired`                  |
+| `POST /api/billing/orders/:id/verify` | Account      | Checkout signature + payment check → `paid`/`pending`/`failed`        |
+| `POST /api/billing/webhook`           | HMAC         | Razorpay webhook (`payment.captured`, `payment.failed`, `order.paid`) |
+| `POST /api/generations`               | Account      | Multipart `image` + `styleId` → `202` job + one-time `token`          |
+| `GET /api/generations/:id`            | Bearer token | Status: `pending`, `processing`, `completed`, `failed`                |
+| `GET /api/generations/:id/result`     | Bearer token | The generated image (`Cache-Control: private, no-store`)              |
+| `POST /api/generations/:id/retry`     | Bearer token | Retry a failed, retryable job (limited)                               |
+| `DELETE /api/generations/:id`         | Bearer token | Delete the job and all its images                                     |
 
-Errors are always `{ "error": { "code", "message" } }`. Unknown jobs and wrong tokens both return
+"Account" means the `X-Account-Token` header. Errors are always `{ "error": { "code", "message" } }`;
+`402 payment-required` means the free quota is used up or the style is premium and there are no
+credits. Unknown jobs and wrong tokens both return
 `404 not-found`. Status responses include `pollAfterMs` while the job is running.
 
 ## How it works
@@ -56,6 +65,31 @@ Errors are always `{ "error": { "code", "message" } }`. Unknown jobs and wrong t
 - **Access** — each job has a random 256-bit token returned once; only its SHA-256 is stored.
 - **Secrets** — database URL, storage keys and provider key exist only in server environment
   variables. `/api/provider` exposes no keys (tested).
+
+## Credits and payments
+
+- **Accounts** are anonymous: `POST /api/accounts` returns a random token that the browser keeps
+  (and that doubles as the user's restore code). Only its SHA-256 is stored.
+- **Free quota** — `FREE_GENERATIONS_PER_DAY` (rolling 24 h) per account _and_ per client IP hash,
+  so new accounts don't reset it. Free styles only. **Premium styles** (and free styles once the
+  quota is used) cost 1 credit.
+- **Ledger** — every credit change is a row in `CreditLedger` with a unique idempotency key
+  (`charge:<job>:<cycle>`, `refund:<job>:<cycle>`, `purchase:<razorpay order>`), so a grant or
+  refund can never happen twice. Charging takes a Postgres advisory lock + row lock per account.
+- **Refunds** — a job that finally fails, or is deleted before finishing, refunds its credit or
+  free use automatically (including after crash recovery via the sweeper).
+- **Payments (Razorpay)** — the server creates the order from its own price table
+  (`src/billing/packs.ts`). The browser opens Checkout with the public key id only. Credits are
+  granted only after either (a) `verify`: HMAC of `order_id|payment_id` with the key secret **and**
+  a server-side fetch showing the payment `captured` for the exact amount, or (b) a webhook with a
+  valid `X-Razorpay-Signature` (HMAC of the raw body with the webhook secret), de-duplicated by
+  `x-razorpay-event-id`. Authorized-but-uncaptured payments stay `pending` until the webhook.
+  Unpaid orders expire after `ORDER_EXPIRY_MINUTES`.
+- **Test mode** — use `rzp_test_` keys. Live keys are refused unless `NODE_ENV=production` and
+  `PAYMENTS_ALLOW_LIVE=true`. With no keys, purchases are disabled (free quota still works).
+- Webhook setup: in the Razorpay Dashboard add `https://<api-host>/api/billing/webhook` with events
+  `payment.captured`, `payment.failed`, `order.paid` and the same secret as
+  `RAZORPAY_WEBHOOK_SECRET`.
 
 ## Enabling a real AI provider
 

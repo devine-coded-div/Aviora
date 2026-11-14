@@ -1,4 +1,7 @@
 import { randomBytes } from 'node:crypto'
+import { AccountService } from './billing/accounts.ts'
+import { PaymentService } from './billing/payments.ts'
+import { RazorpayClient } from './billing/razorpay.ts'
 import { ConfigError, loadConfig } from './config.ts'
 import { createDb } from './db.ts'
 import { createApp } from './http/app.ts'
@@ -43,15 +46,26 @@ async function main() {
   const worker = new JobWorker({ db, storage, provider, config })
   const clientSecret = config.CLIENT_HASH_SECRET ?? randomBytes(32).toString('hex')
 
-  const app = createApp({ config, db, provider, service, worker, clientSecret })
+  const accounts = new AccountService({ db, config })
+  const gateway = config.payments ? new RazorpayClient(config.payments) : null
+  const payments = new PaymentService({ db, gateway, config })
+
+  const app = createApp({ config, db, provider, service, accounts, payments, worker, clientSecret })
   worker.start()
   const cleanup = setInterval(() => {
     sweep({ db, storage, config }).catch((error: unknown) => console.error('cleanup failed', error))
+    payments.expireStale().catch((error: unknown) => console.error('order expiry failed', error))
   }, config.CLEANUP_INTERVAL_MS)
 
   const server = app.listen(config.PORT, () => {
     console.info(
-      `API listening on :${config.PORT} (provider: ${provider.info.id}, storage: ${config.STORAGE_DRIVER})`,
+      `API listening on :${config.PORT} (provider: ${provider.info.id}, storage: ${config.STORAGE_DRIVER}, payments: ${
+        config.payments
+          ? config.payments.testMode
+            ? 'Razorpay test mode'
+            : 'Razorpay LIVE'
+          : 'disabled'
+      })`,
     )
   })
 

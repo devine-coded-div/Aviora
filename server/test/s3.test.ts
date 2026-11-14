@@ -1,7 +1,7 @@
 import request from 'supertest'
 import sharp from 'sharp'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { buildTestApp, jpeg, resetDb, s3Storage } from './helpers.ts'
+import { accountFor, buildTestApp, jpeg, resetDb, s3Storage } from './helpers.ts'
 
 beforeEach(resetDb)
 
@@ -24,6 +24,7 @@ describe('S3 storage (against an S3 API emulator)', () => {
     const ctx = buildTestApp({ storage })
     const created = await request(ctx.app)
       .post('/api/generations')
+      .set('X-Account-Token', await accountFor(ctx.app))
       .field('styleId', 'pixel-8bit')
       .attach('image', await jpeg(), 'me.jpg')
     const { id, token } = created.body

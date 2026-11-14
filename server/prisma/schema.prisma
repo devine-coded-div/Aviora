@@ -38,6 +38,13 @@ model GenerationJob {
   retryable       Boolean   @default(false)
   /// Estimated provider cost in micro-dollars, reserved at creation for the daily budget.
   costMicros      Int       @default(0)
+  /// Account that requested (and paid for) the job.
+  accountId       String?   @db.Uuid
+  /// How the current attempt cycle was paid for.
+  chargeType      ChargeType?
+  chargeState     ChargeState @default(NONE)
+  /// Increments on each manual retry; part of ledger/free-usage idempotency keys.
+  chargeCycle     Int       @default(0)
   nextAttemptAt   DateTime  @default(now())
   lockedAt        DateTime?
   completedAt     DateTime?
@@ -49,4 +56,103 @@ model GenerationJob {
   @@index([status, nextAttemptAt])
   @@index([clientHash, status])
   @@index([createdAt])
+  @@index([status, chargeState])
+}
+
+enum ChargeType {
+  FREE
+  CREDIT
+}
+
+enum ChargeState {
+  NONE
+  CHARGED
+  REFUNDED
+}
+
+enum LedgerReason {
+  PURCHASE
+  GENERATION
+  REFUND
+}
+
+enum OrderStatus {
+  CREATED
+  PAID
+  FAILED
+  EXPIRED
+}
+
+/// Anonymous account (no sign-up). Owns credits; authenticated by a random token whose hash is stored.
+model Account {
+  id         String         @id @db.Uuid
+  tokenHash  String         @unique
+  clientHash String
+  /// Cached balance; always changed in the same transaction as a ledger entry.
+  credits    Int            @default(0)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  ledger     CreditLedger[]
+  orders     PaymentOrder[]
+}
+
+/// Append-only record of every credit change. idempotencyKey makes each grant/charge/refund happen once.
+model CreditLedger {
+  id             String       @id @db.Uuid
+  accountId      String       @db.Uuid
+  delta          Int
+  reason         LedgerReason
+  idempotencyKey String       @unique
+  orderId        String?      @db.Uuid
+  jobId          String?      @db.Uuid
+  balanceAfter   Int
+  createdAt      DateTime     @default(now())
+  account        Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, createdAt])
+}
+
+/// One free generation used (per job attempt cycle). Kept after the job is deleted, so deleting
+/// jobs can't reset the free quota.
+model FreeUsage {
+  id         String   @id @db.Uuid
+  accountId  String   @db.Uuid
+  clientHash String
+  jobId      String   @db.Uuid
+  cycle      Int
+  refunded   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@unique([jobId, cycle])
+  @@index([accountId, createdAt])
+  @@index([clientHash, createdAt])
+}
+
+/// A credit pack purchase. Prices come from the server's pack catalog, never from the client.
+model PaymentOrder {
+  id                String      @id @db.Uuid
+  accountId         String      @db.Uuid
+  packId            String
+  credits           Int
+  /// Smallest currency unit (paise for INR).
+  amount            Int
+  currency          String
+  razorpayOrderId   String      @unique
+  razorpayPaymentId String?     @unique
+  status            OrderStatus @default(CREATED)
+  failureReason     String?
+  paidAt            DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  account           Account     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, createdAt])
+  @@index([status, createdAt])
+}
+
+/// Razorpay webhook events already processed (x-razorpay-event-id), for de-duplication.
+model WebhookEvent {
+  id         String   @id
+  event      String
+  receivedAt DateTime @default(now())
 }

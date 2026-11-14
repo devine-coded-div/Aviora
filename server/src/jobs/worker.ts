@@ -1,3 +1,4 @@
+import { refundJob, settleRefunds } from '../billing/entitlements.ts'
 import type { Config } from '../config.ts'
 import { JobStatus, type Db, type GenerationJob } from '../db.ts'
 import type { AvatarProvider } from '../providers/types.ts'
@@ -121,6 +122,9 @@ export class JobWorker {
           errorMessage: JOB_ERROR_MESSAGES['input-missing'],
         },
       })
+      await refundJob(db, job.id).catch((e: unknown) =>
+        log?.error(`refund failed for job ${job.id}`, e),
+      )
       return
     }
 
@@ -186,6 +190,12 @@ export class JobWorker {
             },
       })
       if (retryLater && backoff === 0) this.kick()
+      if (!retryLater) {
+        // No result: give back the credit / free use for this cycle.
+        await refundJob(db, job.id).catch((e: unknown) =>
+          log?.error(`refund failed for job ${job.id}`, e),
+        )
+      }
     } finally {
       clearTimeout(timeout)
       this.controllers.delete(controller)
@@ -220,6 +230,7 @@ export class JobWorker {
           "updatedAt" = ${now()}
         WHERE "status" = 'PROCESSING' AND "lockedAt" < ${cutoff} AND "attempts" >= "maxAttempts"`,
     ])
+    if (fail > 0) await settleRefunds(db)
     return retry + fail
   }
 }

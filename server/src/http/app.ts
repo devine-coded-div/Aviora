@@ -4,8 +4,10 @@ import { ipKeyGenerator, rateLimit } from 'express-rate-limit'
 import helmet from 'helmet'
 import multer from 'multer'
 import { z } from 'zod'
+import { ACCOUNT_HEADER, type AccountService } from '../billing/accounts.ts'
+import type { PaymentService } from '../billing/payments.ts'
 import type { Config } from '../config.ts'
-import type { Db } from '../db.ts'
+import type { Account, Db } from '../db.ts'
 import { JobService } from '../jobs/service.ts'
 import { hashClient } from '../jobs/tokens.ts'
 import type { JobWorker } from '../jobs/worker.ts'
@@ -20,6 +22,8 @@ export interface AppDeps {
   db: Db
   provider: AvatarProvider
   service: JobService
+  accounts: AccountService
+  payments: PaymentService
   worker: Pick<JobWorker, 'kick'>
   /** Secret for hashing client IPs. */
   clientSecret: string
@@ -40,6 +44,8 @@ export function createApp({
   db,
   provider,
   service,
+  accounts,
+  payments,
   worker,
   clientSecret,
   log = console,
@@ -53,7 +59,7 @@ export function createApp({
     cors({
       origin: (origin, cb) => cb(null, !origin || config.CORS_ORIGINS.includes(origin)),
       methods: ['GET', 'POST', 'DELETE'],
-      allowedHeaders: ['Authorization', 'Content-Type'],
+      allowedHeaders: ['Authorization', 'Content-Type', 'X-Account-Token'],
       maxAge: 600,
     }),
   )
@@ -78,9 +84,31 @@ export function createApp({
       standardHeaders: 'draft-8',
       legacyHeaders: false,
       keyGenerator: clientOf,
+      // Razorpay webhooks come from Razorpay's servers, not end users.
+      skip: (req) => req.path === '/billing/webhook',
       handler: limitHandler('rate-limited', 'Too many requests. Slow down a little.'),
     }),
   )
+  const accountLimiter = rateLimit({
+    windowMs: 60 * 60_000,
+    limit: config.ACCOUNTS_PER_HOUR,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    keyGenerator: clientOf,
+    handler: limitHandler('rate-limited', 'Too many new sessions. Try again later.'),
+  })
+  const orderLimiter = rateLimit({
+    windowMs: 60 * 60_000,
+    limit: config.ORDERS_PER_HOUR,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    keyGenerator: clientOf,
+    handler: limitHandler('rate-limited', 'Too many purchase attempts. Try again later.'),
+  })
+  const json = express.json({ limit: '10kb' })
+
+  /** Resolves the caller's account from X-Account-Token (401 if missing or unknown). */
+  const account = (req: Request): Promise<Account> => accounts.authenticate(req.get(ACCOUNT_HEADER))
   const createLimiter = rateLimit({
     windowMs: 60 * 60_000,
     limit: config.GENERATIONS_PER_HOUR,
@@ -108,7 +136,60 @@ export function createApp({
     res.json(serializeProvider(provider.info, config.RESULT_TTL_HOURS))
   })
 
+  // --- Accounts ---------------------------------------------------------------------------
+
+  app.post('/api/accounts', accountLimiter, async (req, res) => {
+    const { account: created, token } = await accounts.create(clientOf(req))
+    res.status(201).json({ token, account: await accounts.view(created, clientOf(req)) })
+  })
+
+  app.get('/api/account', async (req, res) => {
+    res.json(await accounts.view(await account(req), clientOf(req)))
+  })
+
+  // --- Billing ----------------------------------------------------------------------------
+
+  app.get('/api/billing/packs', (_req, res) => {
+    res.json(payments.packs())
+  })
+
+  app.post('/api/billing/orders', orderLimiter, json, async (req, res) => {
+    const owner = await account(req)
+    res
+      .status(201)
+      .json(await payments.createOrder(owner, (req.body as { packId?: unknown })?.packId))
+  })
+
+  app.get('/api/billing/orders/:id', async (req, res) => {
+    const order = await payments.getOrder(await account(req), req.params.id)
+    res.json(payments.view(order))
+  })
+
+  app.post('/api/billing/orders/:id/verify', json, async (req, res) => {
+    const owner = await account(req)
+    const result = await payments.verify(
+      owner,
+      req.params.id,
+      (req.body ?? {}) as Record<string, unknown>,
+    )
+    res.json({ ...result, account: await accounts.view(owner, clientOf(req)) })
+  })
+
+  // Raw body: the signature is computed over the exact bytes Razorpay sent.
+  app.post('/api/billing/webhook', express.raw({ type: '*/*', limit: '1mb' }), async (req, res) => {
+    const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0)
+    const result = await payments.handleWebhook(
+      raw,
+      req.get('x-razorpay-signature'),
+      req.get('x-razorpay-event-id'),
+    )
+    res.json(result)
+  })
+
+  // --- Generations ------------------------------------------------------------------------
+
   app.post('/api/generations', createLimiter, upload.single('image'), async (req, res) => {
+    const owner = await account(req)
     const body = CreateBody.safeParse(req.body)
     if (!body.success)
       throw new ApiError(422, 'unknown-style', 'Choose one of the available styles.')
@@ -119,6 +200,7 @@ export function createApp({
       styleId: body.data.styleId,
       image,
       clientHash: clientOf(req),
+      account: owner,
     })
     worker.kick()
     res

@@ -15,9 +15,23 @@ export interface StyleStepProps {
   /** Move on to frames (with the selected style's result if one was generated). */
   onContinue: () => void
   focusOnMount: boolean
+  /** Opens the upgrade flow (API mode only). */
+  onGetCredits?: (() => void) | undefined
+  /** Called after each generation finishes or fails (e.g. to refresh credits). */
+  onGenerationSettled?: (() => void) | undefined
+  /** Replaces the default note under the catalog (API mode explains credits instead). */
+  premiumNote?: React.ReactNode
 }
 
-export function StyleStep({ source, onBack, onContinue, focusOnMount }: StyleStepProps) {
+export function StyleStep({
+  source,
+  onBack,
+  onContinue,
+  focusOnMount,
+  onGetCredits,
+  onGenerationSettled,
+  premiumNote,
+}: StyleStepProps) {
   const selectedId = useStyleStore((s) => s.selectedId)
   const results = useStyleStore((s) => s.results)
   const select = useStyleStore((s) => s.select)
@@ -26,7 +40,7 @@ export function StyleStep({ source, onBack, onContinue, focusOnMount }: StyleSte
   const clearPending = useStyleStore((s) => s.clearPending)
   const storeSourceUrl = useStyleStore((s) => s.sourceUrl)
   const [category, setCategory] = useState<CategoryFilterValue>('all')
-  const { job, generate, cancel, provider } = useGeneration(source)
+  const { job, generate, cancel, provider } = useGeneration(source, onGenerationSettled)
   const [announcement, setAnnouncement] = useState('')
 
   // Results belong to one cropped photo; drop them if the photo changed.
@@ -93,6 +107,7 @@ export function StyleStep({ source, onBack, onContinue, focusOnMount }: StyleSte
             provider={provider}
             onGenerate={() => void generate(selectedId)}
             onCancel={cancel}
+            onGetCredits={onGetCredits}
           />
         </div>
 
@@ -104,11 +119,13 @@ export function StyleStep({ source, onBack, onContinue, focusOnMount }: StyleSte
             readyIds={readyIds}
             onSelect={select}
           />
-          <p className="flex gap-2 text-xs text-fg-subtle">
-            <Info className="size-4 shrink-0" aria-hidden="true" />
-            Premium styles will need an upgrade once payments launch. During this preview every
-            style is free to try.
-          </p>
+          {premiumNote ?? (
+            <p className="flex gap-2 text-xs text-fg-subtle">
+              <Info className="size-4 shrink-0" aria-hidden="true" />
+              Premium styles will need an upgrade once payments launch. During this preview every
+              style is free to try.
+            </p>
+          )}
         </div>
       </div>
 

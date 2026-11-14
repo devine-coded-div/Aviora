@@ -21,6 +21,10 @@ export const GENERATION_ERROR_MESSAGES: Record<
     title: 'Connection problem',
     description: 'Check your internet connection and try again.',
   },
+  'payment-required': {
+    title: 'Credits needed',
+    description: 'This style uses a credit, or you’ve used today’s free generations.',
+  },
   'provider-error': {
     title: 'Generation failed',
     description: 'Something went wrong while creating this style. Try again.',

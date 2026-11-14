@@ -143,3 +143,75 @@ describe('style catalog', () => {
     expect(frontendIds).toEqual([...STYLE_IDS])
   })
 })
+
+describe('payment configuration', () => {
+  const keys = {
+    RAZORPAY_KEY_ID: 'rzp_test_abc',
+    RAZORPAY_KEY_SECRET: 'secret',
+    RAZORPAY_WEBHOOK_SECRET: 'whsec',
+  }
+
+  it('is disabled without keys and enabled in test mode with test keys', () => {
+    expect(loadConfig(base).payments).toBeNull()
+    expect(loadConfig({ ...base, ...keys }).payments).toMatchObject({
+      testMode: true,
+      keyId: 'rzp_test_abc',
+    })
+  })
+
+  it('requires all three secrets together', () => {
+    expect(problems({ ...base, RAZORPAY_KEY_ID: 'rzp_test_abc' }).join()).toMatch(/together/)
+  })
+
+  it('refuses live keys outside an explicitly enabled production server', () => {
+    const live = { ...keys, RAZORPAY_KEY_ID: 'rzp_live_abc' }
+    expect(problems({ ...base, ...live }).join()).toMatch(/Live Razorpay keys are refused/)
+    expect(
+      problems({
+        ...base,
+        ...live,
+        NODE_ENV: 'production',
+        CLIENT_HASH_SECRET: 'x'.repeat(32),
+        STORAGE_DRIVER: 's3',
+        S3_BUCKET: 'b',
+        S3_ACCESS_KEY_ID: 'a',
+        S3_SECRET_ACCESS_KEY: 's',
+        CORS_ORIGINS: 'https://a.example',
+      }).join(),
+    ).toMatch(/Live Razorpay keys are refused/)
+    const ok = loadConfig({
+      ...base,
+      ...live,
+      NODE_ENV: 'production',
+      PAYMENTS_ALLOW_LIVE: 'true',
+      CLIENT_HASH_SECRET: 'x'.repeat(32),
+      STORAGE_DRIVER: 's3',
+      S3_BUCKET: 'b',
+      S3_ACCESS_KEY_ID: 'a',
+      S3_SECRET_ACCESS_KEY: 's',
+      CORS_ORIGINS: 'https://a.example',
+    })
+    expect(ok.payments?.testMode).toBe(false)
+  })
+
+  it('rejects malformed key ids', () => {
+    expect(problems({ ...base, ...keys, RAZORPAY_KEY_ID: 'pk_test_123' }).join()).toMatch(
+      /rzp_test_ or rzp_live_/,
+    )
+  })
+})
+
+describe('premium styles', () => {
+  it('match the frontend catalog’s premium flags', async () => {
+    const { PREMIUM_STYLE_IDS } = await import('../src/styles.ts')
+    const catalog = readFileSync(
+      join(import.meta.dirname, '..', '..', 'src', 'features', 'styles', 'catalog.ts'),
+      'utf8',
+    )
+    const entries = catalog.split(/\n  \{\n/).slice(1)
+    const premium = entries
+      .filter((e) => /premium: true/.test(e))
+      .map((e) => /id: '([^']+)'/.exec(e)?.[1])
+    expect(premium.sort()).toEqual([...PREMIUM_STYLE_IDS].sort())
+  })
+})

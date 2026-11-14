@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Config } from '../config.ts'
-import { JobStatus, type Db, type GenerationJob } from '../db.ts'
+import { chargeGeneration, lockForCharging, refundJob } from '../billing/entitlements.ts'
+import { ChargeState, JobStatus, type Account, type Db, type GenerationJob } from '../db.ts'
 import { ApiError } from '../http/errors.ts'
 import type { AvatarProvider } from '../providers/types.ts'
 import type { ObjectStorage } from '../storage/types.ts'
@@ -36,17 +37,15 @@ export class JobService {
     this.now = deps.now ?? (() => new Date())
   }
 
-  async create(args: { styleId: string; image: NormalizedImage; clientHash: string }) {
-    const { styleId, image, clientHash } = args
+  async create(args: {
+    styleId: string
+    image: NormalizedImage
+    clientHash: string
+    account: Account
+  }) {
+    const { styleId, image, clientHash, account } = args
     if (!this.provider.info.styles.includes(styleId)) {
       throw new ApiError(422, 'style-unavailable', 'This style isn’t available right now.')
-    }
-
-    const active = await this.db.generationJob.count({
-      where: { clientHash, status: { in: ACTIVE } },
-    })
-    if (active >= this.config.MAX_ACTIVE_JOBS_PER_CLIENT) {
-      throw new ApiError(429, 'too-many-active-jobs', 'Wait for your current generation to finish.')
     }
 
     const costMicros = Math.round(this.provider.info.costPerImageUsd * 1_000_000)
@@ -71,18 +70,45 @@ export class JobService {
     const key = inputKey(id)
     await this.storage.put(key, image.body, image.mime)
     try {
-      const job = await this.db.generationJob.create({
-        data: {
-          id,
-          tokenHash: hashToken(token),
+      // Quota/credit check, charge and job creation happen atomically under a per-client lock.
+      const job = await this.db.$transaction(async (tx) => {
+        await lockForCharging(tx, account.id, clientHash)
+        const active = await tx.generationJob.count({
+          where: { clientHash, status: { in: ACTIVE } },
+        })
+        if (active >= this.config.MAX_ACTIVE_JOBS_PER_CLIENT) {
+          throw new ApiError(
+            429,
+            'too-many-active-jobs',
+            'Wait for your current generation to finish.',
+          )
+        }
+        const chargeType = await chargeGeneration(tx, {
+          account,
           clientHash,
+          jobId: id,
+          cycle: 0,
           styleId,
-          providerId: this.provider.info.id,
-          inputKey: key,
-          maxAttempts: this.config.JOB_MAX_ATTEMPTS,
-          costMicros,
-          nextAttemptAt: this.now(),
-        },
+          config: this.config,
+          now: this.now(),
+        })
+        return tx.generationJob.create({
+          data: {
+            id,
+            tokenHash: hashToken(token),
+            clientHash,
+            accountId: account.id,
+            styleId,
+            providerId: this.provider.info.id,
+            inputKey: key,
+            maxAttempts: this.config.JOB_MAX_ATTEMPTS,
+            costMicros,
+            nextAttemptAt: this.now(),
+            chargeType,
+            chargeState: ChargeState.CHARGED,
+            chargeCycle: 0,
+          },
+        })
       })
       return { job, token }
     } catch (error) {
@@ -99,6 +125,7 @@ export class JobService {
     return job
   }
 
+  /** Retry a failed job. The failed cycle was refunded; the new cycle is charged again. */
   async retry(job: GenerationJob): Promise<GenerationJob> {
     const allowed =
       job.status === JobStatus.FAILED &&
@@ -108,26 +135,50 @@ export class JobService {
     if (!allowed) {
       throw new ApiError(409, 'not-retryable', 'This generation can’t be retried. Start a new one.')
     }
-    // Guard on status so two concurrent retries can't both succeed.
-    const { count } = await this.db.generationJob.updateMany({
-      where: { id: job.id, status: JobStatus.FAILED, manualRetries: job.manualRetries },
-      data: {
-        status: JobStatus.PENDING,
-        attempts: 0,
-        manualRetries: { increment: 1 },
-        nextAttemptAt: this.now(),
-        errorCode: null,
-        errorMessage: null,
-        retryable: false,
-        failedAt: null,
-      },
+    await refundJob(this.db, job.id)
+    const account = job.accountId
+      ? await this.db.account.findUnique({ where: { id: job.accountId } })
+      : null
+    if (!account) throw new ApiError(409, 'not-retryable', 'This generation can’t be retried.')
+
+    await this.db.$transaction(async (tx) => {
+      await lockForCharging(tx, account.id, job.clientHash)
+      const cycle = job.chargeCycle + 1
+      // Guard on status/manualRetries so two concurrent retries can't both succeed.
+      const { count } = await tx.generationJob.updateMany({
+        where: { id: job.id, status: JobStatus.FAILED, manualRetries: job.manualRetries },
+        data: {
+          status: JobStatus.PENDING,
+          attempts: 0,
+          manualRetries: { increment: 1 },
+          nextAttemptAt: this.now(),
+          errorCode: null,
+          errorMessage: null,
+          retryable: false,
+          failedAt: null,
+          chargeCycle: cycle,
+          chargeState: ChargeState.CHARGED,
+        },
+      })
+      if (count === 0) throw new ApiError(409, 'not-retryable', 'This generation can’t be retried.')
+      const chargeType = await chargeGeneration(tx, {
+        account,
+        clientHash: job.clientHash,
+        jobId: job.id,
+        cycle,
+        styleId: job.styleId,
+        config: this.config,
+        now: this.now(),
+      })
+      await tx.generationJob.update({ where: { id: job.id }, data: { chargeType } })
     })
-    if (count === 0) throw new ApiError(409, 'not-retryable', 'This generation can’t be retried.')
     return this.db.generationJob.findUniqueOrThrow({ where: { id: job.id } })
   }
 
   /** Delete the job and every stored image. Safe while processing: the worker discards its result. */
   async remove(job: GenerationJob): Promise<void> {
+    // Deleting before a result exists gives the credit / free use back.
+    await refundJob(this.db, job.id)
     await this.db.generationJob.deleteMany({ where: { id: job.id } })
     await Promise.all(
       [job.inputKey, job.resultKey]

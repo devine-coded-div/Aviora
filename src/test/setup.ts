@@ -31,3 +31,16 @@ URL.revokeObjectURL = vi.fn<(url: string) => void>()
 afterEach(() => {
   cleanup()
 })
+
+// jsdom has no modal dialogs. Minimal stand-in: open/close toggle the attribute and `close`
+// fires the close event, which is all our dialogs rely on.
+if (typeof HTMLDialogElement.prototype.showModal !== 'function') {
+  HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
+    this.open = true
+  }
+  HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
+    if (!this.open) return
+    this.open = false
+    this.dispatchEvent(new Event('close'))
+  }
+}

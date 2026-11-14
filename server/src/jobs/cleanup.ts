@@ -1,3 +1,4 @@
+import { settleRefunds } from '../billing/entitlements.ts'
 import type { Config } from '../config.ts'
 import { JobStatus, type Db } from '../db.ts'
 import type { ObjectStorage } from '../storage/types.ts'
@@ -13,6 +14,11 @@ export interface CleanupReport {
   inputsDeleted: number
   jobsDeleted: number
 }
+
+/** Free-usage records only matter for the rolling 24 h quota; keep 2 days. */
+const FREE_USAGE_KEEP_MS = 48 * 3_600_000
+/** Razorpay retries webhooks for about a day; keep event ids much longer than that. */
+const WEBHOOK_EVENT_KEEP_MS = 30 * 24 * 3_600_000
 
 const ABANDONED_MS = 24 * 3_600_000
 
@@ -33,6 +39,13 @@ export async function sweep({
 }: CleanupDeps): Promise<CleanupReport> {
   const t = now().getTime()
   const report: CleanupReport = { inputsDeleted: 0, jobsDeleted: 0 }
+
+  // Any failed job still holding a charge gets its refund before it can be deleted below.
+  await settleRefunds(db)
+  await db.freeUsage.deleteMany({ where: { createdAt: { lt: new Date(t - FREE_USAGE_KEEP_MS) } } })
+  await db.webhookEvent.deleteMany({
+    where: { receivedAt: { lt: new Date(t - WEBHOOK_EVENT_KEEP_MS) } },
+  })
 
   const staleInputs = await db.generationJob.findMany({
     where: {

@@ -3,7 +3,16 @@ import sharp from 'sharp'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { hashToken } from '../src/jobs/tokens.ts'
 import { MemoryStorage } from '../src/storage/memory.ts'
-import { buildTestApp, fakeProvider, jpeg, png, resetDb, testClock, testConfig } from './helpers.ts'
+import {
+  accountFor,
+  buildTestApp,
+  fakeProvider,
+  jpeg,
+  png,
+  resetDb,
+  testClock,
+  testConfig,
+} from './helpers.ts'
 
 beforeEach(resetDb)
 
@@ -12,6 +21,7 @@ type Ctx = ReturnType<typeof buildTestApp>
 async function create(ctx: Ctx, styleId = 'anime-classic', image?: Buffer) {
   const res = await request(ctx.app)
     .post('/api/generations')
+    .set('X-Account-Token', await accountFor(ctx.app))
     .field('styleId', styleId)
     .attach('image', image ?? (await jpeg()), 'me.jpg')
   return res
@@ -98,7 +108,10 @@ describe('POST /api/generations', () => {
           .toBuffer()
       },
     }
-    const req = request(ctx.app).post('/api/generations').field('styleId', 'anime-classic')
+    const req = request(ctx.app)
+      .post('/api/generations')
+      .set('X-Account-Token', await accountFor(ctx.app))
+      .field('styleId', 'anime-classic')
     const res = kind ? await req.attach('image', await files[kind]!(), 'upload.jpg') : await req
     expect(res.status).toBe(code)
     expect(res.body).toEqual({ error: { code: errorCode, message: expect.any(String) } })

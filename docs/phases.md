@@ -716,3 +716,56 @@ sharing storage; unhandled "no adapter" startup error.
   (Redis/Postgres) for express-rate-limit. The job queue itself is already multi-instance safe.
 - No user accounts yet; jobs are protected by capability tokens. Phase 7 adds payments and usage
   limits per user.
+
+## Phase 7 — Free quota, credit packs and payments ✅
+
+Server-enforced entitlements with an append-only credit ledger, Razorpay orders created and
+verified on the server, and an upgrade modal in the studio. Payments run in **Razorpay test mode**
+only; the frontend never decides what a user is entitled to.
+
+### What was built
+
+- **Anonymous accounts** (`X-Account-Token`, stored hashed; the token doubles as a restore code for
+  moving credits to another device).
+- **Free quota**: 3 free-style generations per rolling 24 h, counted per account _and_ per client
+  IP hash. **Premium styles** and over-quota generations cost 1 credit.
+- **Ledger** with unique idempotency keys for charges, refunds and purchases; charging under an
+  advisory lock + row lock; automatic refunds when a job fails or is deleted early (also after
+  crash recovery).
+- **Razorpay**: server price table (₹99/10, ₹249/30, ₹699/100 — placeholders), orders created
+  server-side, checkout signature verification **plus** a server fetch of the payment (captured,
+  exact amount), signed webhooks with event-id de-duplication in the same transaction,
+  `pending` / `failed` / `expired` order states, order expiry, live-key guard.
+- **Frontend**: credits bar on the style step, upgrade modal (packs, test-mode banner, purchase
+  states: starting → checkout → verifying → paid / pending (polled) / failed (retry) / cancelled,
+  restore code), "Get credits" on `payment-required` errors, server-connection state with retry.
+  The deployed site still runs the on-device mock (no API is hosted), so billing is only active
+  when `VITE_API_BASE_URL` is set.
+
+### Verification (run 2026-11-14)
+
+| Command                                   | Result                                           |
+| ----------------------------------------- | ------------------------------------------------ |
+| `server: npm run typecheck`               | ✅ Clean                                         |
+| `server: npm test`                        | ✅ 5 files, 87 tests (real Postgres 16 + s3rver) |
+| `npm run typecheck / lint / format:check` | ✅ Clean                                         |
+| `npm test` (frontend)                     | ✅ 33 files, 318 tests                           |
+| `npm run build`                           | ✅                                               |
+
+Server billing tests cover: quota per account and per IP; premium charging; insufficient credits
+→ 402 with nothing charged; refunds on failure and on delete; concurrent charges never overspend;
+order amounts from the server only; valid / forged / mismatched / uncaptured payments; replayed
+verify and webhook never grant twice; webhook signature on the raw body; failed and expired
+orders; live keys refused outside production. Frontend tests cover the API client, checkout
+loader, every purchase outcome, polling a pending payment, restore, disabled payments, and the
+studio in API mode (server down → retry → premium style → 402 → upgrade modal).
+
+Fixed during the phase: "Retry" on the credits bar didn't retry a failed account creation.
+
+### Limitations
+
+- Not exercised against Razorpay's real sandbox: its hosts are unreachable from the build
+  environment and no test keys were provided. The integration follows Razorpay's documented
+  signature scheme and is tested against a fake Razorpay API. Needs one manual sandbox purchase.
+- Anonymous accounts: clearing browser storage without saving the restore code loses credits.
+- Prices are placeholders; GST/invoicing and refund policy pages are not done.

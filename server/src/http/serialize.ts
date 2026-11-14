@@ -41,6 +41,12 @@ export function serializeJob(
         }
       : null,
     pollAfterMs: done || failed ? null : opts.pollAfterMs,
+    charge: job.chargeType
+      ? {
+          type: job.chargeType === 'FREE' ? 'free' : 'credit',
+          refunded: job.chargeState === 'REFUNDED',
+        }
+      : null,
   }
 }
 

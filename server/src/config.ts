@@ -52,6 +52,20 @@ const EnvSchema = z.object({
   /** Hard spending cap per rolling 24 hours. Required for a paid provider. */
   AI_DAILY_BUDGET_USD: z.coerce.number().nonnegative().optional(),
 
+  /** Razorpay credentials. Payments are disabled unless all three are set. */
+  RAZORPAY_KEY_ID: z.string().optional(),
+  RAZORPAY_KEY_SECRET: z.string().optional(),
+  RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+  RAZORPAY_API_BASE: z.url().default('https://api.razorpay.com'),
+  /** Live keys (rzp_live_…) are refused unless NODE_ENV=production and this is true. */
+  PAYMENTS_ALLOW_LIVE: bool.default(false),
+  ORDER_EXPIRY_MINUTES: z.coerce.number().int().positive().default(60),
+  ORDERS_PER_HOUR: z.coerce.number().int().positive().default(20),
+
+  /** Free generations per rolling 24 h, per account and per client IP. */
+  FREE_GENERATIONS_PER_DAY: z.coerce.number().int().nonnegative().default(3),
+  ACCOUNTS_PER_HOUR: z.coerce.number().int().positive().default(10),
+
   MOCK_DELAY_MS: z.coerce.number().int().nonnegative().default(1500),
   MOCK_FAIL_RATE: z.coerce.number().min(0).max(1).default(0),
 
@@ -101,7 +115,15 @@ export class ConfigError extends Error {
   }
 }
 
-export type Config = Env & { providerTerms: ProviderTerms | null }
+export interface PaymentsConfig {
+  keyId: string
+  keySecret: string
+  webhookSecret: string
+  apiBase: string
+  testMode: boolean
+}
+
+export type Config = Env & { providerTerms: ProviderTerms | null; payments: PaymentsConfig | null }
 
 /**
  * Parse and cross-check the environment. Throws ConfigError listing every problem, so a
@@ -163,6 +185,37 @@ export function loadConfig(source: Record<string, string | undefined> = process.
     }
   }
 
+  let payments: PaymentsConfig | null = null
+  const rzp = [env.RAZORPAY_KEY_ID, env.RAZORPAY_KEY_SECRET, env.RAZORPAY_WEBHOOK_SECRET]
+  if (rzp.some(Boolean)) {
+    if (!rzp.every(Boolean)) {
+      problems.push(
+        'Payments need RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET and RAZORPAY_WEBHOOK_SECRET together',
+      )
+    } else {
+      const keyId = env.RAZORPAY_KEY_ID!
+      const live = keyId.startsWith('rzp_live_')
+      if (!live && !keyId.startsWith('rzp_test_')) {
+        problems.push('RAZORPAY_KEY_ID must start with rzp_test_ or rzp_live_')
+      }
+      if (live && !(env.NODE_ENV === 'production' && env.PAYMENTS_ALLOW_LIVE)) {
+        problems.push(
+          'Live Razorpay keys are refused: use rzp_test_ keys in development, or set NODE_ENV=production and PAYMENTS_ALLOW_LIVE=true',
+        )
+      }
+      if (env.NODE_ENV === 'production' && !env.RAZORPAY_API_BASE.startsWith('https://')) {
+        problems.push('RAZORPAY_API_BASE must use https in production')
+      }
+      payments = {
+        keyId,
+        keySecret: env.RAZORPAY_KEY_SECRET!,
+        webhookSecret: env.RAZORPAY_WEBHOOK_SECRET!,
+        apiBase: env.RAZORPAY_API_BASE.replace(/\/+$/, ''),
+        testMode: !live,
+      }
+    }
+  }
+
   if (problems.length > 0) throw new ConfigError(problems)
-  return { ...env, providerTerms }
+  return { ...env, providerTerms, payments }
 }

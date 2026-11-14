@@ -1,4 +1,6 @@
+import { QueryClientProvider } from '@tanstack/react-query'
 import { Outlet } from 'react-router'
+import { queryClient } from '../queryClient'
 import { SiteFooter } from './SiteFooter'
 import { SiteHeader } from './SiteHeader'
 import { useScrollToHash } from './useScrollToHash'
@@ -19,7 +21,9 @@ export function RootLayout() {
       <SiteHeader />
 
       <main id="main-content" tabIndex={-1} className="flex flex-1 flex-col">
-        <Outlet />
+        <QueryClientProvider client={queryClient}>
+          <Outlet />
+        </QueryClientProvider>
       </main>
 
       <SiteFooter />

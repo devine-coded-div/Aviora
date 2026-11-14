@@ -23,7 +23,7 @@ export type GenerationJob =
  * Runs one generation at a time for the given source image. Starting a new one cancels the
  * previous; leaving the step cancels whatever is running.
  */
-export function useGeneration(source: { blob: Blob; url: string }) {
+export function useGeneration(source: { blob: Blob; url: string }, onSettled?: () => void) {
   const provider = useGenerationProvider()
   const setResult = useStyleStore((s) => s.setResult)
   const [job, setJob] = useState<GenerationJob>({ status: 'idle' })
@@ -63,6 +63,7 @@ export function useGeneration(source: { blob: Blob; url: string }) {
         })
         attemptsRef.current.delete(styleId)
         setJob({ status: 'idle' })
+        onSettled?.()
       } catch (error) {
         if (controller.signal.aborted) return
         const err = toGenerationError(error)
@@ -71,11 +72,12 @@ export function useGeneration(source: { blob: Blob; url: string }) {
           return
         }
         setJob({ status: 'error', styleId, kind: err.kind, retryable: err.retryable, attempts })
+        onSettled?.()
       } finally {
         if (controllerRef.current === controller) controllerRef.current = null
       }
     },
-    [provider, setResult, source.blob, source.url],
+    [provider, setResult, source.blob, source.url, onSettled],
   )
 
   const dismissError = useCallback(() => setJob({ status: 'idle' }), [])

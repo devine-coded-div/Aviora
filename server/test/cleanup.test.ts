@@ -2,13 +2,22 @@ import request from 'supertest'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { sweep } from '../src/jobs/cleanup.ts'
 import { MemoryStorage } from '../src/storage/memory.ts'
-import { buildTestApp, fakeProvider, jpeg, resetDb, testClock, testConfig } from './helpers.ts'
+import {
+  accountFor,
+  buildTestApp,
+  fakeProvider,
+  jpeg,
+  resetDb,
+  testClock,
+  testConfig,
+} from './helpers.ts'
 
 beforeEach(resetDb)
 
 async function createJob(ctx: ReturnType<typeof buildTestApp>) {
   const res = await request(ctx.app)
     .post('/api/generations')
+    .set('X-Account-Token', await accountFor(ctx.app))
     .field('styleId', 'anime-classic')
     .attach('image', await jpeg(), 'me.jpg')
   return res.body as { id: string; token: string }
