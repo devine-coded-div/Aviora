@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import cors from 'cors'
 import express, { type Request } from 'express'
 import { ipKeyGenerator, rateLimit } from 'express-rate-limit'
@@ -63,8 +64,31 @@ export function createApp({
       maxAge: 600,
     }),
   )
-  app.use((_req, res, next) => {
+  app.use((req, res, next) => {
     res.set('Cache-Control', 'no-store')
+    // Correlates a user's report with server logs. Accept a sane upstream id, else make one.
+    const incoming = req.get('x-request-id')
+    const requestId = incoming && /^[\w.-]{8,64}$/.test(incoming) ? incoming : randomUUID()
+    res.locals['requestId'] = requestId
+    res.set('X-Request-Id', requestId)
+    if (config.LOG_REQUESTS) {
+      const started = performance.now()
+      res.on('finish', () => {
+        // Route pattern, not the raw URL: ids and query strings stay out of the logs.
+        const route = (req.route as { path?: string } | undefined)?.path
+        log.info('request', {
+          requestId,
+          method: req.method,
+          route: route
+            ? `${req.baseUrl}${route}`
+            : req.path.startsWith('/api/')
+              ? '(unmatched)'
+              : req.path,
+          status: res.statusCode,
+          ms: Math.round(performance.now() - started),
+        })
+      })
+    }
     next()
   })
 

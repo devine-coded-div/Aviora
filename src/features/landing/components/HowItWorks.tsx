@@ -40,7 +40,7 @@ export function HowItWorks() {
                   </span>
                   <span
                     aria-hidden="true"
-                    className="text-3xl font-semibold text-border-strong tabular-nums"
+                    className="text-3xl font-semibold text-fg-subtle tabular-nums"
                   >
                     {String(index + 1).padStart(2, '0')}
                   </span>

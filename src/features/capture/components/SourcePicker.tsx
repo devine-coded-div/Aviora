@@ -1,6 +1,7 @@
 import { Notice } from '@/components/ui'
 import { Camera, ImageUp, Loader2, Lock } from 'lucide-react'
 import { useState, type DragEvent } from 'react'
+import { env } from '@/config/env'
 import { cn } from '@/lib/cn'
 import { PHOTO_ERROR_MESSAGES } from '../lib/messages'
 import type { PhotoErrorKind } from '../types'
@@ -79,7 +80,9 @@ export function SourcePicker({ onCamera, onBrowse, onFile, busy, error }: Source
 
       <p className="flex items-center justify-center gap-2 text-sm text-fg-muted">
         <Lock className="size-4" aria-hidden="true" />
-        Your photo stays on this device. Nothing is uploaded.
+        {env.apiBaseUrl
+          ? 'Your photo stays on this device until you generate a style.'
+          : 'Your photo stays on this device. Nothing is uploaded.'}
       </p>
     </div>
   )

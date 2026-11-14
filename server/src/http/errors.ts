@@ -31,6 +31,7 @@ export const notFoundHandler: RequestHandler = (_req, res) => {
 /** Converts every error into `{ error: { code, message } }`. Internals are logged, never sent. */
 export function errorHandler(log: Pick<Console, 'error'> = console): ErrorRequestHandler {
   return (error, _req, res, _next) => {
+    const requestId = res.locals['requestId'] as string | undefined
     let status = 500
     let code = 'internal'
     let message = 'Something went wrong. Try again.'
@@ -61,8 +62,18 @@ export function errorHandler(log: Pick<Console, 'error'> = console): ErrorReques
       code = 'payload-too-large'
       message = 'Request too large.'
     } else {
-      log.error('Unhandled API error', error)
+      log.error('Unhandled API error', { requestId, error: errorDetail(error) })
     }
-    res.status(status).json({ error: { code, message } })
+    // Unexpected errors carry the request id so a user's report can be matched to the logs
+    // (every response also has it in X-Request-Id).
+    res.status(status).json({
+      error: { code, message, ...(status === 500 && requestId ? { requestId } : {}) },
+    })
   }
+}
+
+function errorDetail(error: unknown) {
+  return error instanceof Error
+    ? { name: error.name, message: error.message, stack: error.stack }
+    : error
 }

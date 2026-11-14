@@ -81,6 +81,17 @@ describe('production safety', () => {
     expect(found).toMatch(/CORS_ORIGINS/)
   })
 
+  it('rejects a short hashing secret and non-https browser origins in production', () => {
+    const found = problems({
+      ...base,
+      NODE_ENV: 'production',
+      CLIENT_HASH_SECRET: 'x'.repeat(20),
+      CORS_ORIGINS: 'https://ok.example,http://plain.example',
+    }).join('\n')
+    expect(found).toMatch(/at least 32 characters/)
+    expect(found).toMatch(/must be https in production \(got http:\/\/plain\.example\)/)
+  })
+
   it('requires S3 credentials for the S3 driver', () => {
     expect(problems({ DATABASE_URL: 'postgresql://x', STORAGE_DRIVER: 's3' }).join()).toMatch(
       /S3_BUCKET/,

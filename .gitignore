@@ -30,3 +30,7 @@ coverage
 .env
 .env.*
 !.env.example
+dist-fullstack
+test-results
+playwright-report
+blob-report

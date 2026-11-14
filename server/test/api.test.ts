@@ -479,8 +479,65 @@ describe('HTTP hygiene', () => {
     const res = await create(buildTestApp({ storage: broken as unknown as MemoryStorage }))
     expect(res.status).toBe(500)
     expect(res.body).toEqual({
-      error: { code: 'internal', message: 'Something went wrong. Try again.' },
+      error: {
+        code: 'internal',
+        message: 'Something went wrong. Try again.',
+        requestId: res.headers['x-request-id'],
+      },
     })
     expect(JSON.stringify(res.body)).not.toContain('SECRET')
+  })
+})
+
+describe('observability', () => {
+  it('tags every response with a request id and logs one line per request', async () => {
+    const ctx = buildTestApp()
+    const acct = await accountFor(ctx.app)
+    const res = await create(ctx)
+    expect(res.status).toBe(202)
+    const requestId = res.headers['x-request-id']
+    expect(requestId).toMatch(/^[0-9a-f-]{36}$/)
+
+    const line = ctx.log.info.mock.calls.find(
+      ([msg, data]) =>
+        msg === 'request' && (data as { requestId?: string }).requestId === requestId,
+    )
+    expect(line?.[1]).toMatchObject({
+      method: 'POST',
+      route: '/api/generations',
+      status: 202,
+      ms: expect.any(Number),
+    })
+    // Route patterns only: no ids, tokens or headers.
+    const logged = JSON.stringify(ctx.log.info.mock.calls)
+    expect(logged).not.toContain(acct)
+    expect(logged).not.toContain(res.body.id)
+    expect(logged).not.toContain(res.body.token)
+  })
+
+  it('keeps a well-formed upstream request id and replaces junk', async () => {
+    const ctx = buildTestApp()
+    const kept = await request(ctx.app).get('/api/provider').set('X-Request-Id', 'edge-12345678')
+    expect(kept.headers['x-request-id']).toBe('edge-12345678')
+    const junk = await request(ctx.app).get('/api/provider').set('X-Request-Id', 'x"; drop')
+    expect(junk.headers['x-request-id']).toMatch(/^[0-9a-f-]{36}$/)
+  })
+
+  it('logs unhandled errors with their request id', async () => {
+    const ctx = buildTestApp()
+    const broken = buildTestApp({
+      storage: {
+        ...ctx.storage,
+        put: async () => {
+          throw new Error('disk on fire')
+        },
+      } as unknown as MemoryStorage,
+    })
+    const res = await create(broken)
+    expect(res.status).toBe(500)
+    expect(broken.log.error).toHaveBeenCalledWith('Unhandled API error', {
+      requestId: res.body.error.requestId,
+      error: expect.objectContaining({ message: 'disk on fire' }),
+    })
   })
 })

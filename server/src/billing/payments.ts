@@ -119,10 +119,7 @@ export class PaymentService {
         notes: { orderId: id, accountId: account.id, packId: pack.id },
       })
     } catch (error) {
-      this.log.error(
-        'Razorpay order creation failed',
-        error instanceof GatewayError ? error.message : error,
-      )
+      this.log.error('Razorpay order creation failed', gatewayDetail(error))
       throw new ApiError(502, 'payment-provider-error', 'Couldn’t start the payment. Try again.')
     }
     if (rzp.amount !== pack.amount || rzp.currency !== CURRENCY) {
@@ -185,10 +182,7 @@ export class PaymentService {
     try {
       payment = await gateway.fetchPayment(razorpayPaymentId)
     } catch (error) {
-      this.log.warn(
-        'Payment lookup failed; leaving order pending',
-        error instanceof GatewayError ? error.message : error,
-      )
+      this.log.warn('Payment lookup failed; leaving order pending', gatewayDetail(error))
       return { outcome: 'pending', order: this.view(order) }
     }
     const outcome = await this.applyPayment(order, payment)
@@ -331,3 +325,14 @@ export class PaymentService {
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+/** Loggable summary of a gateway failure: status and root cause, never the response body. */
+function gatewayDetail(error: unknown) {
+  if (!(error instanceof GatewayError)) return error
+  const cause = error.cause instanceof Error ? (error.cause.cause ?? error.cause) : undefined
+  return {
+    message: error.message,
+    status: error.status,
+    ...(cause instanceof Error ? { cause: cause.message } : {}),
+  }
+}

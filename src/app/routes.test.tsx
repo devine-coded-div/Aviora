@@ -5,8 +5,8 @@ import { axeViolations } from '@/test/axe'
 import { renderRoute } from '@/test/renderRoute'
 
 describe('app routing', () => {
-  it('renders the landing page inside the app shell', () => {
-    renderRoute(ROUTES.home)
+  it('renders the landing page inside the app shell', async () => {
+    await renderRoute(ROUTES.home)
 
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/your selfie, turned into/i)
     expect(screen.getByRole('banner')).toBeInTheDocument()
@@ -19,12 +19,12 @@ describe('app routing', () => {
   })
 
   it('sets a page title per route', async () => {
-    renderRoute(ROUTES.home)
+    await renderRoute(ROUTES.home)
     await waitFor(() => expect(document.title).toMatch(new RegExp(`^${APP_NAME}`)))
   })
 
   it('takes the primary hero CTA to the studio', async () => {
-    const { user, router } = renderRoute(ROUTES.home)
+    const { user, router } = await renderRoute(ROUTES.home)
 
     const [heroCta] = screen.getAllByRole('link', { name: /create my avatar/i })
     await user.click(heroCta!)
@@ -34,8 +34,8 @@ describe('app routing', () => {
     await waitFor(() => expect(document.title).toBe(`Studio — ${APP_NAME}`))
   })
 
-  it('shows a not-found page for unknown routes', () => {
-    renderRoute('/does-not-exist')
+  it('shows a not-found page for unknown routes', async () => {
+    await renderRoute('/does-not-exist')
 
     expect(screen.getByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Back to home' })).toHaveAttribute('href', '/')
@@ -44,7 +44,7 @@ describe('app routing', () => {
   it.each([ROUTES.studio, '/does-not-exist'])(
     'has no detectable a11y violations on %s',
     async (path) => {
-      renderRoute(path)
+      await renderRoute(path)
       expect(await axeViolations()).toEqual([])
     },
   )

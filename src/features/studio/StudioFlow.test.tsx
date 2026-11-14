@@ -24,7 +24,7 @@ beforeEach(() => {
 
 describe('StudioFlow', () => {
   it('moves from the crop result to styles and back, keeping progress in sync', async () => {
-    const { user } = renderRoute(ROUTES.studio)
+    const { user } = await renderRoute(ROUTES.studio)
 
     expect(screen.getByRole('heading', { name: 'Looking good' })).toBeInTheDocument()
     const progress = screen.getByRole('list', { name: 'Progress' })
@@ -41,7 +41,7 @@ describe('StudioFlow', () => {
   })
 
   it('continues from styles to frames, framing the photo when no style was generated', async () => {
-    const { user } = renderRoute(ROUTES.studio)
+    const { user } = await renderRoute(ROUTES.studio)
     await user.click(screen.getByRole('button', { name: /choose a style/i }))
     await user.click(screen.getByRole('button', { name: 'Continue to frames' }))
 
@@ -68,7 +68,7 @@ describe('StudioFlow', () => {
         },
       },
     })
-    const { user } = renderRoute(ROUTES.studio)
+    const { user } = await renderRoute(ROUTES.studio)
     await user.click(screen.getByRole('button', { name: /choose a style/i }))
     expect(screen.getByText('Uses your Anime Classic preview.')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Continue to frames' }))
@@ -78,7 +78,7 @@ describe('StudioFlow', () => {
   })
 
   it('continues from frames to preview & download and back', async () => {
-    const { user } = renderRoute(ROUTES.studio)
+    const { user } = await renderRoute(ROUTES.studio)
     await user.click(screen.getByRole('button', { name: /choose a style/i }))
     await user.click(screen.getByRole('button', { name: 'Continue to frames' }))
     await user.click(screen.getByRole('button', { name: 'Continue to download' }))
@@ -92,9 +92,9 @@ describe('StudioFlow', () => {
     expect(screen.getByRole('heading', { name: 'Frame your avatar' })).toHaveFocus()
   })
 
-  it('shows the capture step when there is no photo yet', () => {
+  it('shows the capture step when there is no photo yet', async () => {
     usePhotoStore.getState().reset()
-    renderRoute(ROUTES.studio)
+    await renderRoute(ROUTES.studio)
     expect(screen.getByRole('heading', { name: 'Add your photo' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /choose a style/i })).not.toBeInTheDocument()
   })

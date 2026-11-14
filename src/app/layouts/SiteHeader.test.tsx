@@ -12,21 +12,21 @@ function getMobileNav() {
 }
 
 describe('SiteHeader', () => {
-  it('keeps a Create CTA in the header that links to the studio', () => {
-    renderRoute(ROUTES.home)
+  it('keeps a Create CTA in the header that links to the studio', async () => {
+    await renderRoute(ROUTES.home)
     const header = screen.getByRole('banner')
     expect(within(header).getByRole('link', { name: /create/i })).toHaveAttribute('href', '/studio')
   })
 
-  it('links primary nav items to landing sections from any page', () => {
-    renderRoute(ROUTES.studio)
+  it('links primary nav items to landing sections from any page', async () => {
+    await renderRoute(ROUTES.studio)
     const nav = screen.getByRole('navigation', { name: 'Primary' })
     expect(within(nav).getByRole('link', { name: 'FAQ' })).toHaveAttribute('href', '/#faq')
     expect(within(nav).getByRole('link', { name: 'Styles' })).toHaveAttribute('href', '/#styles')
   })
 
   it('opens and closes the mobile menu with the toggle button', async () => {
-    const { user } = renderRoute(ROUTES.home)
+    const { user } = await renderRoute(ROUTES.home)
     const toggle = screen.getByRole('button', { name: 'Open menu' })
 
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
@@ -43,7 +43,7 @@ describe('SiteHeader', () => {
   })
 
   it('closes the mobile menu on Escape and returns focus to the toggle', async () => {
-    const { user } = renderRoute(ROUTES.home)
+    const { user } = await renderRoute(ROUTES.home)
     const toggle = screen.getByRole('button', { name: 'Open menu' })
 
     await user.click(toggle)
@@ -55,7 +55,7 @@ describe('SiteHeader', () => {
   })
 
   it('closes the mobile menu after choosing a link and scrolls to that section', async () => {
-    const { user, router } = renderRoute(ROUTES.studio)
+    const { user, router } = await renderRoute(ROUTES.studio)
 
     await user.click(screen.getByRole('button', { name: 'Open menu' }))
     await user.click(within(getMobileNav()).getByRole('link', { name: 'How it works' }))

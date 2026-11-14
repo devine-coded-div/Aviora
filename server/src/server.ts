@@ -5,6 +5,7 @@ import { RazorpayClient } from './billing/razorpay.ts'
 import { ConfigError, loadConfig } from './config.ts'
 import { createDb } from './db.ts'
 import { createApp } from './http/app.ts'
+import { createLogger } from './log.ts'
 import { sweep } from './jobs/cleanup.ts'
 import { JobService } from './jobs/service.ts'
 import { JobWorker } from './jobs/worker.ts'
@@ -21,6 +22,11 @@ async function main() {
     console.error(error instanceof ConfigError ? error.message : error)
     process.exit(1)
   }
+
+  const log = createLogger(
+    config.LOG_FORMAT ?? (config.NODE_ENV === 'production' ? 'json' : 'text'),
+  )
+  process.on('unhandledRejection', (reason) => log.error('Unhandled rejection', reason))
 
   const db = createDb(config.DATABASE_URL)
   const storage: ObjectStorage =
@@ -39,26 +45,36 @@ async function main() {
   try {
     provider = createProvider(config)
   } catch (error) {
-    console.error(error instanceof ProviderSetupError ? error.message : error)
+    log.error(error instanceof ProviderSetupError ? error.message : String(error))
     process.exit(1)
   }
   const service = new JobService({ db, storage, provider, config })
-  const worker = new JobWorker({ db, storage, provider, config })
+  const worker = new JobWorker({ db, storage, provider, config, log })
   const clientSecret = config.CLIENT_HASH_SECRET ?? randomBytes(32).toString('hex')
 
   const accounts = new AccountService({ db, config })
   const gateway = config.payments ? new RazorpayClient(config.payments) : null
-  const payments = new PaymentService({ db, gateway, config })
+  const payments = new PaymentService({ db, gateway, config, log })
 
-  const app = createApp({ config, db, provider, service, accounts, payments, worker, clientSecret })
+  const app = createApp({
+    config,
+    db,
+    provider,
+    service,
+    accounts,
+    payments,
+    worker,
+    clientSecret,
+    log,
+  })
   worker.start()
   const cleanup = setInterval(() => {
-    sweep({ db, storage, config }).catch((error: unknown) => console.error('cleanup failed', error))
-    payments.expireStale().catch((error: unknown) => console.error('order expiry failed', error))
+    sweep({ db, storage, config }).catch((error: unknown) => log.error('cleanup failed', error))
+    payments.expireStale().catch((error: unknown) => log.error('order expiry failed', error))
   }, config.CLEANUP_INTERVAL_MS)
 
   const server = app.listen(config.PORT, () => {
-    console.info(
+    log.info(
       `API listening on :${config.PORT} (provider: ${provider.info.id}, storage: ${config.STORAGE_DRIVER}, payments: ${
         config.payments
           ? config.payments.testMode
@@ -70,7 +86,7 @@ async function main() {
   })
 
   const shutdown = async () => {
-    console.info('Shutting down…')
+    log.info('Shutting down…')
     clearInterval(cleanup)
     server.close()
     await worker.stop()

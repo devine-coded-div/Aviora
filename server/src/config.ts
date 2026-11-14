@@ -20,6 +20,10 @@ const csv = z
 
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  /** `json` (one object per line) or `text`. Defaults to json in production. */
+  LOG_FORMAT: z.enum(['json', 'text']).optional(),
+  /** Log one line per request (method, route, status, duration, request id). */
+  LOG_REQUESTS: bool.default(true),
   PORT: z.coerce.number().int().positive().default(8787),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   /** Browser origins allowed to call the API, e.g. https://devine-coded-div.github.io */
@@ -139,8 +143,15 @@ export function loadConfig(source: Record<string, string | undefined> = process.
 
   if (env.NODE_ENV === 'production') {
     if (!env.CLIENT_HASH_SECRET) problems.push('CLIENT_HASH_SECRET is required in production')
+    else if (env.CLIENT_HASH_SECRET.length < 32) {
+      problems.push('CLIENT_HASH_SECRET must be at least 32 characters')
+    }
     if (env.STORAGE_DRIVER !== 's3') problems.push('STORAGE_DRIVER must be "s3" in production')
     if (env.CORS_ORIGINS.length === 0) problems.push('CORS_ORIGINS is required in production')
+    const insecure = env.CORS_ORIGINS.filter((o) => !o.startsWith('https://'))
+    if (insecure.length > 0) {
+      problems.push(`CORS_ORIGINS must be https in production (got ${insecure.join(', ')})`)
+    }
   }
   if (env.STORAGE_DRIVER === 's3') {
     for (const key of ['S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'] as const) {

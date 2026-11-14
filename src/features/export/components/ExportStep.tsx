@@ -171,7 +171,7 @@ export function ExportStep({ source, onBack, focusOnMount }: ExportStepProps) {
             <Button
               variant="gradient"
               size="lg"
-              className="flex-1"
+              className="sm:flex-1"
               onClick={() => void download()}
               disabled={busy || !ready}
             >

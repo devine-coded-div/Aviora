@@ -74,7 +74,7 @@ function fileInput() {
 describe('CaptureFlow — camera', () => {
   it('only asks for the camera after the user explicitly turns it on', async () => {
     const gum = mockMediaDevices()
-    const { user } = renderRoute(ROUTES.studio)
+    const { user } = await renderRoute(ROUTES.studio)
 
     await user.click(screen.getByRole('button', { name: /take a selfie/i }))
     expect(screen.getByText('Allow camera access')).toBeInTheDocument()
@@ -93,7 +93,7 @@ describe('CaptureFlow — camera', () => {
         return Promise.resolve(s.stream)
       },
     })
-    const { user } = renderRoute(ROUTES.studio)
+    const { user } = await renderRoute(ROUTES.studio)
 
     await user.click(screen.getByRole('button', { name: /take a selfie/i }))
     await user.click(screen.getByRole('button', { name: 'Turn on camera' }))
@@ -116,7 +116,7 @@ describe('CaptureFlow — camera', () => {
 
   it('offers camera switching only when more than one camera exists', async () => {
     const gum = mockMediaDevices({ cameras: 2 })
-    const { user } = renderRoute(ROUTES.studio)
+    const { user } = await renderRoute(ROUTES.studio)
 
     await user.click(screen.getByRole('button', { name: /take a selfie/i }))
     await user.click(screen.getByRole('button', { name: 'Turn on camera' }))
@@ -134,7 +134,7 @@ describe('CaptureFlow — camera', () => {
 
   it('hides camera switching with a single camera', async () => {
     mockMediaDevices({ cameras: 1 })
-    const { user } = renderRoute(ROUTES.studio)
+    const { user } = await renderRoute(ROUTES.studio)
     await user.click(screen.getByRole('button', { name: /take a selfie/i }))
     await user.click(screen.getByRole('button', { name: 'Turn on camera' }))
     await screen.findByRole('button', { name: 'Take photo' })
@@ -144,7 +144,7 @@ describe('CaptureFlow — camera', () => {
 
   it('explains denied permission and lets the user retry or upload', async () => {
     mockMediaDevices({ getUserMedia: () => Promise.reject(domError('NotAllowedError')) })
-    const { user } = renderRoute(ROUTES.studio)
+    const { user } = await renderRoute(ROUTES.studio)
 
     await user.click(screen.getByRole('button', { name: /take a selfie/i }))
     await user.click(screen.getByRole('button', { name: 'Turn on camera' }))
@@ -157,7 +157,7 @@ describe('CaptureFlow — camera', () => {
 
   it('explains a missing camera without offering a pointless retry', async () => {
     mockMediaDevices({ getUserMedia: () => Promise.reject(domError('NotFoundError')) })
-    const { user } = renderRoute(ROUTES.studio)
+    const { user } = await renderRoute(ROUTES.studio)
 
     await user.click(screen.getByRole('button', { name: /take a selfie/i }))
     await user.click(screen.getByRole('button', { name: 'Turn on camera' }))
@@ -168,7 +168,7 @@ describe('CaptureFlow — camera', () => {
 
   it('falls back to the native camera app when getUserMedia is unavailable', async () => {
     removeMediaDevices()
-    const { user } = renderRoute(ROUTES.studio)
+    const { user } = await renderRoute(ROUTES.studio)
     const nativeInput = screen.getByTestId('native-camera-input')
     const click = vi.spyOn(nativeInput, 'click').mockImplementation(() => {})
 
@@ -184,7 +184,7 @@ describe('CaptureFlow — camera', () => {
   it('stops the camera when the user leaves the studio', async () => {
     const { stream, track } = fakeStream()
     mockMediaDevices({ getUserMedia: () => Promise.resolve(stream) })
-    const { user, router } = renderRoute(ROUTES.studio)
+    const { user, router } = await renderRoute(ROUTES.studio)
 
     await user.click(screen.getByRole('button', { name: /take a selfie/i }))
     await user.click(screen.getByRole('button', { name: 'Turn on camera' }))
@@ -201,7 +201,7 @@ describe('CaptureFlow — upload', () => {
     [jpeg('anim.gif', 'image/gif'), 'That file type isn’t supported'],
     [jpeg('big.jpg', 'image/jpeg', 26 * 1024 * 1024), 'That photo is too large'],
   ])('rejects %s with a clear message', async (file, message) => {
-    const { user } = renderRoute(ROUTES.studio)
+    const { user } = await renderRoute(ROUTES.studio)
     await user.upload(fileInput(), file)
     expect(await screen.findByRole('alert')).toHaveTextContent(message)
     expect(usePhotoStore.getState().original).toBeNull()
@@ -209,13 +209,13 @@ describe('CaptureFlow — upload', () => {
 
   it('rejects photos that fail to decode', async () => {
     image.decodeImage.mockRejectedValue(new Error('corrupt'))
-    const { user } = renderRoute(ROUTES.studio)
+    const { user } = await renderRoute(ROUTES.studio)
     await user.upload(fileInput(), jpeg())
     expect(await screen.findByRole('alert')).toHaveTextContent('We couldn’t open that photo')
   })
 
   it('accepts dropped files', async () => {
-    renderRoute(ROUTES.studio)
+    await renderRoute(ROUTES.studio)
     const zone = screen.getByRole('button', { name: /upload a photo/i }).parentElement!
     const file = jpeg()
     const dataTransfer = { files: [file], types: ['Files'], dropEffect: 'none' }
@@ -226,7 +226,7 @@ describe('CaptureFlow — upload', () => {
   })
 
   it('goes from upload to crop to result, keeping the original, then starts over', async () => {
-    const { user } = renderRoute(ROUTES.studio)
+    const { user } = await renderRoute(ROUTES.studio)
     const file = jpeg()
     await user.upload(fileInput(), file)
 
@@ -263,7 +263,7 @@ describe('CaptureFlow — upload', () => {
   })
 
   it('shows the privacy promise and has no a11y violations on the first step', async () => {
-    renderRoute(ROUTES.studio)
+    await renderRoute(ROUTES.studio)
     expect(screen.getByText(/nothing is uploaded/i)).toBeInTheDocument()
     expect(screen.getByRole('list', { name: 'Progress' })).toBeInTheDocument()
     expect(await axeViolations()).toEqual([])

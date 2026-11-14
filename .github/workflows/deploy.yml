@@ -1,7 +1,8 @@
 name: CI & deploy
 
 # Every push to main is checked (frontend + API server) and, if everything passes, the frontend
-# is deployed to GitHub Pages. Pull requests are checked only. The API isn't deployed yet.
+# is deployed to GitHub Pages. Pull requests are checked only. The API isn't deployed yet
+# (see docs/deployment.md).
 on:
   push:
     branches: [main]
@@ -36,6 +37,9 @@ jobs:
         # Project sites are served from /<repo-name>/
         env:
           BASE_PATH: /${{ github.event.repository.name }}/
+          # Repository variable (Settings → Secrets and variables → Actions → Variables). Empty =
+          # on-device mock mode. Public by design: it ends up in the JavaScript bundle.
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
         run: npm run build
 
       - name: SPA fallback (deep links like /studio)
@@ -96,9 +100,76 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Build the container images and smoke-test the API image
+        run: |
+          docker build --target migrate -t avatar-studio-migrate .
+          docker build -t avatar-studio-api .
+          docker run --rm --network host \
+            -e DATABASE_URL=postgresql://postgres:postgres@localhost:5432/avatar_migrate \
+            avatar-studio-migrate
+          docker run -d --name api --network host \
+            -e NODE_ENV=development -e PORT=8787 -e STORAGE_DRIVER=memory \
+            -e DATABASE_URL=postgresql://postgres:postgres@localhost:5432/avatar_migrate \
+            avatar-studio-api
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:8787/api/health && exit 0
+            sleep 1
+          done
+          docker logs api
+          exit 1
+
+  e2e:
+    name: End-to-end (Playwright)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      E2E_DATABASE_ADMIN_URL: postgresql://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+
+      - run: npm ci
+
+      - name: Install the API server (for the full-stack tests)
+        working-directory: server
+        run: npm ci && npx prisma generate
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Core journey, camera, uploads, export fidelity, recovery (desktop + mobile)
+        run: npm run test:e2e
+
+      - name: Full stack — real API, Postgres, fake Razorpay (test keys)
+        run: npm run test:e2e:fullstack
+
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report
+            test-results
+          retention-days: 7
+
   deploy:
     name: Deploy to GitHub Pages
-    needs: [check, server]
+    needs: [check, server, e2e]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:

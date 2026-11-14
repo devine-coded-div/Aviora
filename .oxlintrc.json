@@ -24,5 +24,12 @@
       }
     ]
   },
-  "ignorePatterns": ["coverage", "dist", "server"]
+  "ignorePatterns": [
+    "coverage",
+    "dist",
+    "server",
+    "dist-fullstack",
+    "test-results",
+    "playwright-report"
+  ]
 }

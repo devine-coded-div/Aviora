@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, FlaskConical, Info } from 'lucide-react'
+import { ArrowLeft, ArrowRight, FlaskConical, Info, Lock } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Button, StepHeading } from '@/components/ui'
 import { getStyle, stylesInCategory } from '../catalog'
@@ -89,11 +89,21 @@ export function StyleStep({
           <p className="text-pretty">
             <span className="font-medium">Preview mode — not AI.</span>{' '}
             <span className="text-fg-muted">
-              Styles are simulated with simple colour filters on your device so you can try the
-              flow. Real AI-generated avatars are coming soon. Your photo isn’t uploaded.
+              Styles are simulated with simple colour filters so you can try the flow. Real
+              AI-generated avatars are coming soon.{' '}
+              {provider.runsOnDevice
+                ? 'Your photo isn’t uploaded.'
+                : 'Your cropped photo is sent to our server to make the preview and deleted automatically.'}
             </span>
           </p>
         </div>
+      )}
+      {provider.kind !== 'mock' && !provider.runsOnDevice && (
+        <p className="flex items-center gap-2 text-sm text-fg-muted">
+          <Lock className="size-4 shrink-0" aria-hidden="true" />
+          Generating sends your cropped photo to our server. It’s deleted automatically after
+          processing and never used for training.
+        </p>
       )}
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-start">

@@ -769,3 +769,107 @@ Fixed during the phase: "Retry" on the credits bar didn't retry a failed account
   signature scheme and is tested against a fake Razorpay API. Needs one manual sandbox purchase.
 - Anonymous accounts: clearing browser storage without saving the restore code loses credits.
 - Prices are placeholders; GST/invoicing and refund policy pages are not done.
+
+## Phase 8 — Audit, end-to-end tests and release readiness ✅
+
+Audited responsiveness, accessibility, image-processing performance, privacy, API security,
+payment integrity, error handling, observability and deployment readiness. Added Playwright
+suites that run in CI, fixed what the audit and the new tests found, and wrote the deployment
+guide and release checklist.
+
+### End-to-end tests (Playwright)
+
+`npm run test:e2e` — production build, mock mode, **desktop Chrome and Pixel 7** (36 tests):
+
+- **Core journey**: landing → upload → crop → style → frame → download; PNG and JPEG are decoded
+  and checked to be exactly 1080 × 1080; custom file names are sanitised.
+- **Export fidelity**: the downloaded PNG, scaled to the on-screen preview, differs from the
+  preview canvas by a mean of 0.25–0.42 / 255 per channel (test limit 2).
+- **Camera** (Chrome's synthetic camera): live preview, capture → crop, camera released after
+  capture and when leaving the studio mid-capture; blocked permission → explanation + upload.
+- **Upload validation**: text file, tiny image, corrupt JPEG, 26 MB file — each rejected with the
+  right message, then a valid photo is accepted. The photo never leaves the device in mock mode
+  (no non-GET requests at all).
+- **Layout**: no sideways scrolling on any step at 320 px, 412 px and desktop; primary buttons
+  are on screen and ≥ 44 px tall.
+- **Accessibility**: axe-core (WCAG 2.2 A/AA, including colour contrast, which jsdom can't
+  check) on the landing page and every studio step, desktop and mobile.
+- **Recovery**: 404 page; reload mid-flow; connection lost after load; failed generation →
+  retry or frame the plain photo; studio chunk missing after a redeploy → "Reload page".
+
+`npm run test:e2e:fullstack` — production build against the **real API server, a fresh Postgres
+database and a local fake Razorpay** (REST API, signed webhooks, stand-in checkout.js; test keys
+only) (5 tests):
+
+- Free generation → quota used → 402 → upgrade modal (axe-checked) → purchase → premium style
+  costs 1 credit → 1080 × 1080 download; honest "sent to our server" copy in API mode.
+- Replaying the signed checkout response 3× grants credits once; the same payment against
+  another order and a forged signature are rejected.
+- Authorized payment stays pending, then the webhook (delivered twice) completes it exactly once
+  and the open modal updates by itself.
+- Declined card and closed checkout leave the balance untouched.
+- Restore code moves credits to a second browser.
+
+Both suites run in CI (new `e2e` job with a Postgres service); deployment now needs it to pass.
+
+### Audit findings fixed
+
+| Area           | Finding (verified)                                                                                                                                                           | Fix                                                                                                                                                                                                |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Responsiveness | On phones, **Download**, **Show original** and **Regenerate** collapsed to 24 px tall (`flex-1` in a column layout)                                                          | Grow only in row layout (`sm:flex-1`); 44 px touch-target test                                                                                                                                     |
+| Accessibility  | "How it works" step numbers had 1.95:1 contrast                                                                                                                              | Raised to the subtle text colour (passes 3:1 for large text)                                                                                                                                       |
+| Privacy        | In API mode the copy said "Your photo isn’t uploaded" / "Nothing is uploaded" although the server generates the preview                                                      | Copy now depends on where generation runs; API mode says the photo is sent and deleted automatically                                                                                               |
+| Performance    | Landing page downloaded the whole studio (543 kB JS, 167 kB gzip)                                                                                                            | Studio route is lazy-loaded: landing 412 kB (129 kB gzip), studio chunk 133 kB (40 kB gzip)                                                                                                        |
+| Error handling | The mock renderer was a separate 1.6 kB chunk: a dropped connection made generation fail with a generic error, and retry could never recover (browsers cache failed imports) | Bundled into the studio chunk                                                                                                                                                                      |
+| Error handling | A missing page chunk after a redeploy showed a generic error with no recovery                                                                                                | Specific message + **Reload page**                                                                                                                                                                 |
+| Error handling | Credits bar "Retry" didn't retry a failed account creation (Phase 7 finding)                                                                                                 | Fixed (Phase 7 commit)                                                                                                                                                                             |
+| Observability  | No request ids or request logs; text-only logs; gateway errors logged without their cause                                                                                    | JSON logs (`LOG_FORMAT`), `X-Request-Id` on every response and in 500 bodies, one log line per request with the route pattern only (tested to contain no tokens or ids), gateway root cause logged |
+| API security   | Production accepted short hashing secrets and non-https CORS origins                                                                                                         | Refused at startup (tested)                                                                                                                                                                        |
+| Deployment     | No container image or migration runbook                                                                                                                                      | `server/Dockerfile` (runtime + `migrate` target) built and health-checked in CI; `docs/deployment.md`; `docs/release-checklist.md`; `VITE_API_BASE_URL` read from a repository variable            |
+
+Audited and found sound (no change): server-side upload validation and metadata stripping,
+capability tokens and hashed account tokens, CORS allowlist, Helmet headers, rate limits incl.
+IPv6 /56, request size limits, server-defined prices, signature + payment-fetch verification,
+idempotent ledger, webhook de-duplication, refunds, live-key guard, object-URL revocation, camera
+release, no third-party requests before checkout, `npm audit` clean in both packages.
+
+Image processing measured with a 24-megapixel JPEG in headless Chrome (desktop CPU): decode +
+prepare ≈ 0.3 s, crop ≈ 0.2 s, JS heap ≈ 16 MB. Real low-end phones will be slower; not measured
+on devices.
+
+### Verification (run 2026-11-14)
+
+| Command                                           | Result                                |
+| ------------------------------------------------- | ------------------------------------- |
+| `npm run typecheck / lint / format:check`         | ✅ Clean (app, tests, e2e, configs)   |
+| `npm test`                                        | ✅ 33 files, 318 tests                |
+| `npm run build`                                   | ✅                                    |
+| `server: typecheck / lint / format:check / build` | ✅                                    |
+| `server: npm test`                                | ✅ 6 files, 93 tests (twice)          |
+| `npm run test:e2e`                                | ✅ 36 tests, desktop + mobile (twice) |
+| `npm run test:e2e:fullstack`                      | ✅ 5 tests (twice)                    |
+| `npm audit` (frontend, server)                    | ✅ 0 vulnerabilities                  |
+
+The Docker images could not be built here (no Docker daemon); CI builds them and checks
+`/api/health` on the next push.
+
+### Remaining risks
+
+1. **No real AI.** Every style is a labelled colour-filter mock. A provider needs a vendor
+   choice, contract terms and an adapter.
+2. **API not deployed.** The live site runs in on-device mock mode; accounts and purchases only
+   exist when `VITE_API_BASE_URL` points at a hosted API.
+3. **Razorpay not exercised against the real sandbox.** Its hosts are unreachable from the build
+   environment and no test keys were provided. The flow is verified against a faithful local fake
+   (documented signature schemes, REST shapes, webhooks); one real sandbox run is on the release
+   checklist. The suggested CSP entries for Razorpay are likewise unverified.
+4. **Anonymous accounts.** Clearing browser storage without saving the restore code loses
+   purchased credits; anyone holding the code can spend them. Real sign-in (email/OTP) is the fix.
+5. **Rate limits are per process.** Running more than one API instance multiplies them; use a
+   shared store first.
+6. **Real devices not tested.** Camera behaviour is tested with Chrome's synthetic camera; iOS
+   Safari / Android Chrome, share sheet and low-end performance need a manual pass.
+7. **Legal and pricing.** Prices are placeholders; privacy policy/FAQ, terms, refund policy and
+   GST/invoicing must be finalised before charging real money.
+8. **No security headers on GitHub Pages** (host limitation) and no error monitoring service
+   (e.g. Sentry) on the frontend; server errors are only in logs.

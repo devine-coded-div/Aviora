@@ -3,3 +3,8 @@ coverage
 node_modules
 package-lock.json
 server
+dist-fullstack
+test-results
+playwright-report
+blob-report
+e2e/fixtures

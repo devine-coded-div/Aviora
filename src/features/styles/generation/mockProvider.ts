@@ -1,5 +1,6 @@
 import { getStyle } from '../catalog'
 import type { MockEffect } from '../types'
+import { renderMockStyle } from './render'
 import {
   GenerationError,
   type AvatarGenerationProvider,
@@ -21,7 +22,7 @@ export interface MockProviderOptions {
   failureRate?: number
   random?: () => number
   /** Turns the photo + effect into an image. Defaults to the canvas renderer. */
-  render?: (image: Blob, effect: MockEffect) => Promise<Blob>
+  render?: RenderFn
 }
 
 function wait(ms: number, signal: AbortSignal | undefined): Promise<void> {
@@ -38,6 +39,8 @@ function wait(ms: number, signal: AbortSignal | undefined): Promise<void> {
     signal?.addEventListener('abort', onAbort, { once: true })
   })
 }
+
+type RenderFn = (image: Blob, effect: MockEffect) => Promise<Blob>
 
 const PROGRESS_STEPS: readonly GenerationProgress[] = [
   { stage: 'queued', percent: 5 },
@@ -71,7 +74,7 @@ export function createMockProvider(options: MockProviderOptions = {}): AvatarGen
         }
       }
 
-      const render = options.render ?? (await import('./render')).renderMockStyle
+      const render = options.render ?? renderMockStyle
       let output: Blob
       try {
         output = await render(image, style.mock)

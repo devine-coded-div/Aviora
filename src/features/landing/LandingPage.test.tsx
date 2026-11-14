@@ -10,8 +10,8 @@ function getSection(name: RegExp) {
 }
 
 describe('LandingPage', () => {
-  it('has exactly one h1 and labelled sections for every nav target', () => {
-    renderRoute(ROUTES.home)
+  it('has exactly one h1 and labelled sections for every nav target', async () => {
+    await renderRoute(ROUTES.home)
 
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
     for (const id of Object.values(SECTION_IDS)) {
@@ -21,16 +21,16 @@ describe('LandingPage', () => {
     }
   })
 
-  it('points every "Create my avatar" CTA at the studio', () => {
-    renderRoute(ROUTES.home)
+  it('points every "Create my avatar" CTA at the studio', async () => {
+    await renderRoute(ROUTES.home)
 
     const ctas = screen.getAllByRole('link', { name: /create my avatar/i })
     expect(ctas.length).toBeGreaterThanOrEqual(3) // header, hero, closing CTA
     for (const cta of ctas) expect(cta).toHaveAttribute('href', ROUTES.studio)
   })
 
-  it('shows every avatar style, marks premium ones and labels examples as illustrations', () => {
-    renderRoute(ROUTES.home)
+  it('shows every avatar style, marks premium ones and labels examples as illustrations', async () => {
+    await renderRoute(ROUTES.home)
     const gallery = getSection(/five looks/i)
 
     for (const style of STYLE_SHOWCASE) {
@@ -43,16 +43,16 @@ describe('LandingPage', () => {
     expect(within(gallery).getByText(/illustrations made for this page/i)).toBeInTheDocument()
   })
 
-  it('lists how-it-works steps in order', () => {
-    renderRoute(ROUTES.home)
+  it('lists how-it-works steps in order', async () => {
+    await renderRoute(ROUTES.home)
     const steps = within(getSection(/four steps/i)).getAllByRole('listitem')
 
     expect(steps).toHaveLength(HOW_IT_WORKS.length)
     steps.forEach((step, i) => expect(step).toHaveTextContent(HOW_IT_WORKS[i]!.title))
   })
 
-  it('shows the privacy commitments', () => {
-    renderRoute(ROUTES.home)
+  it('shows the privacy commitments', async () => {
+    await renderRoute(ROUTES.home)
     const privacy = getSection(/your face/i)
     for (const point of PRIVACY_POINTS) {
       expect(within(privacy).getByRole('heading', { name: point.title })).toBeInTheDocument()
@@ -60,7 +60,7 @@ describe('LandingPage', () => {
   })
 
   it('expands FAQ answers on demand', async () => {
-    const { user } = renderRoute(ROUTES.home)
+    const { user } = await renderRoute(ROUTES.home)
     const faq = getSection(/questions, answered/i)
     const first = FAQS[0]!
 
@@ -75,7 +75,7 @@ describe('LandingPage', () => {
   })
 
   it('has no detectable a11y violations', async () => {
-    renderRoute(ROUTES.home)
+    await renderRoute(ROUTES.home)
     expect(await axeViolations()).toEqual([])
   })
 })

@@ -91,6 +91,14 @@ credits. Unknown jobs and wrong tokens both return
   `payment.captured`, `payment.failed`, `order.paid` and the same secret as
   `RAZORPAY_WEBHOOK_SECRET`.
 
+## Logs and request ids
+
+`LOG_FORMAT=json` (default in production) writes one JSON object per line. Each request is logged
+once with `requestId`, method, route pattern, status and duration — never headers, tokens, ids
+from the URL or images. Every response carries `X-Request-Id`; 500 responses also include it in
+the body so a user report can be matched to the log line. Deployment notes:
+[`docs/deployment.md`](../docs/deployment.md).
+
 ## Enabling a real AI provider
 
 The server refuses to start with `AI_PROVIDER` set to anything but `mock` until **all** of these are

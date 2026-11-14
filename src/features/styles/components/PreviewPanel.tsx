@@ -149,14 +149,14 @@ export function PreviewPanel({
             <>
               <Button
                 variant="secondary"
-                className="flex-1"
+                className="sm:flex-1"
                 // The label says what the button will show next; it flips with each press.
                 onClick={() => setShowOriginal((v) => !v)}
               >
                 {showOriginal ? <Sparkles aria-hidden="true" /> : <Eye aria-hidden="true" />}
                 {showOriginal ? 'Show styled' : 'Show original'}
               </Button>
-              <Button variant="ghost" className="flex-1" onClick={onGenerate}>
+              <Button variant="ghost" className="sm:flex-1" onClick={onGenerate}>
                 <RefreshCcw aria-hidden="true" />
                 Regenerate
               </Button>
