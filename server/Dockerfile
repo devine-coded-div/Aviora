@@ -4,6 +4,9 @@
 # Configuration comes only from environment variables (see .env.example); no secrets are baked in.
 
 FROM node:22-bookworm-slim AS build
+# Prisma's migration engine needs OpenSSL, which the slim image leaves out.
+RUN apt-get update && apt-get install -y --no-install-recommends openssl \
+  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
