@@ -20,7 +20,7 @@ export default defineConfig({
     baseURL: `http://localhost:${WEB}`,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
-    launchOptions: executablePath ? { executablePath } : {},
+    ...(executablePath ? { launchOptions: { executablePath } } : { channel: 'chromium' }),
   },
   webServer: [
     {

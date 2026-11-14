@@ -9,6 +9,9 @@ const PORT = 4173
 const executablePath = process.env['PW_CHROME_PATH']
 
 const chromium = {
+  // Full Chromium in new-headless mode: the default headless shell never settles camera
+  // requests, so camera tests need the real browser.
+  ...(executablePath ? {} : { channel: 'chromium' }),
   launchOptions: {
     ...(executablePath ? { executablePath } : {}),
     // A synthetic camera, so getUserMedia works headless. Permission is still per-test.
